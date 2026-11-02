@@ -1,0 +1,130 @@
+{
+  "$comment": "Merchandising for the TikTok Shop listings of Mall of Anitoy (@leduyenminh). `npm run import` fetches each listing's title, description, photos, SKUs, prices and stock from TikTok Shop and writes src/data/catalog.json. To add a listing, append its TikTok product id (the long number at the end of the listing URL). Entries with `videoOnly` have no TikTok Shop listing: they are imported as drafts (hidden) with photos from the shop's video covers until the seller sets a price in /admin.",
+  "shopUrl": "https://shop.tiktok.com/vn/store/mall-of-anitoy/7495695344959129740",
+  "listings": [
+    {
+      "tiktokProductId": "1731581424295380108",
+      "slug": "mo-hinh-frieren-fern-stark-chibi-khop-xoay-dau-pvc",
+      "collection": "frieren",
+      "category": "mini",
+      "tags": ["frieren", "fern", "stark", "sousou no frieren", "chibi", "decor"],
+      "featured": 100,
+      "videoIds": ["7549993146407472404", "7527101479904103696", "7581162734172130580", "7553301852889074960", "7536273814301183239", "7656322520693411092", "7627760395935091989", "7586734408854473985", "7537853071469202709", "7594160266502229249", "7588433330534698248", "7528781074755898642", "7513020234454895879", "7517823152458665223", "7657157899403283720", "7531591983840759047", "7515783406832356615", "7656321056503811348", "7633031631548189960", "7656326591559044360", "7632734394762939668", "7632538479074741511", "7633457885283962130", "7674564397632703765", "7633679526999903495", "7674564950177746184", "7674565388323081493", "7632650329791794439", "7674562947850521876"]
+    },
+    {
+      "tiktokProductId": "1731406172224063628",
+      "slug": "moc-khoa-acrylic-frieren-fern-himmel-stark",
+      "collection": "frieren",
+      "category": "accessory",
+      "tags": ["keychain", "móc khoá", "acrylic", "frieren", "fern", "himmel", "stark"],
+      "featured": 60,
+      "videoIds": ["7485802326825913605", "7515785628425161991"]
+    },
+    {
+      "tiktokProductId": "1731739548394554508",
+      "slug": "mo-hinh-osakana-neko-dang-dung-cam-ca-20cm",
+      "collection": "neko",
+      "category": "figure",
+      "tags": ["neko", "osakana", "kinako", "cat girl", "20cm"],
+      "featured": 92,
+      "videoIds": ["7620485098479127828", "7518640842546924808", "7620836995979398421", "7614891907692383495", "7518794555769048327"]
+    },
+    {
+      "tiktokProductId": "1732681072582362252",
+      "slug": "mo-hinh-neko-kinako-ao-trum-tim-10cm",
+      "collection": "neko",
+      "category": "mini",
+      "tags": ["neko", "kinako", "hoodie", "cat girl"],
+      "featured": 75,
+      "videoIds": ["7621217028191341845", "7555213325857066260", "7555219159605447953", "7555210852991847700"]
+    },
+    {
+      "tiktokProductId": "1730183145967224972",
+      "slug": "mo-hinh-chainsaw-man-denji-aki-makima-power-9cm",
+      "collection": "khac",
+      "category": "mini",
+      "tags": ["chainsaw man", "denji", "aki", "makima", "power", "pochita"],
+      "featured": 40,
+      "videoIds": ["7482434579647827206"]
+    },
+    {
+      "tiktokProductId": "1731012705142212748",
+      "slug": "mo-hinh-mini-chainsaw-man-denji-power-cute",
+      "collection": "khac",
+      "category": "mini",
+      "tags": ["chainsaw man", "denji", "power", "aki", "mini"],
+      "featured": 35,
+      "videoIds": ["7482435186140007685"]
+    },
+    {
+      "tiktokProductId": "1731969014499674252",
+      "slug": "standee-acrylic-honkai-star-rail-18cm",
+      "collection": "khac",
+      "category": "accessory",
+      "tags": ["honkai star rail", "hsr", "standee", "robin", "kafka", "silver wolf"],
+      "featured": 30,
+      "videoIds": ["7484071785730772229"]
+    },
+    {
+      "tiktokProductId": "1732037239614048396",
+      "slug": "day-deo-dien-thoai-honkai-star-rail",
+      "collection": "khac",
+      "category": "accessory",
+      "tags": ["honkai star rail", "hsr", "phone strap", "dây đeo"],
+      "featured": 25,
+      "videoIds": ["7489718987454942470", "7492967986047864085"]
+    },
+    {
+      "tiktokProductId": "1731012707779119244",
+      "slug": "moc-khoa-acrylic-genshin-impact",
+      "collection": "khac",
+      "category": "accessory",
+      "tags": ["genshin impact", "keychain", "móc khoá", "acrylic"],
+      "featured": 25,
+      "videoIds": ["7478866157714296069"]
+    },
+    {
+      "videoOnly": true,
+      "id": "v-frieren-20cm",
+      "slug": "mo-hinh-frieren-om-hoa-20cm-co-de",
+      "title": "Mô hình Frieren pháp sư tiễn táng 20cm đứng ôm hoa – có đế, no box",
+      "description": "Frieren ôm đóa hoa tưởng nhớ Himmel – khoảnh khắc đáng nhớ nhất của series. Cao 20cm, có đế trưng bày (no box).",
+      "attributes": [{ "name": "Chiều cao", "value": "20 cm" }, { "name": "Chất liệu", "value": "Nhựa PVC" }, { "name": "Đế trưng bày", "value": "Có (no box)" }],
+      "collection": "frieren",
+      "category": "figure",
+      "tags": ["frieren", "himmel", "figure", "20cm"],
+      "featured": 98,
+      "imageVideoIds": ["7619409900178803969", "7597853119460019477", "7618627305706900757", "7613067330490322184"],
+      "videoIds": ["7621226947661548801", "7618627305706900757", "7611820025145478420", "7597853119460019477", "7619409900178803969", "7613067330490322184", "7611009561905925384"]
+    },
+    {
+      "videoOnly": true,
+      "id": "v-osakana-sitting",
+      "slug": "mo-hinh-osakana-neko-chan-dang-ngoi",
+      "title": "Mô hình Osakana neko-chan dáng ngồi – My cat is a kawaii girl",
+      "description": "My cat is a kawaii girl – bé neko Osakana dáng ngồi, trang trí góc làm việc, học tập rất chill.",
+      "attributes": [{ "name": "Chất liệu", "value": "Nhựa PVC" }],
+      "collection": "neko",
+      "category": "mini",
+      "tags": ["neko", "osakana", "kinako", "cat girl"],
+      "featured": 88,
+      "imageVideoIds": ["7557246821714693377", "7621236910488440071", "7492968606561537281", "7555214243209956628"],
+      "videoIds": ["7555214243209956628", "7557246821714693377", "7621236910488440071", "7492968606561537281", "7621218499368733972", "7478384002714373382", "7495648865081642261", "7499137968263810325"]
+    },
+    {
+      "videoOnly": true,
+      "id": "v-kimetsu",
+      "slug": "mo-hinh-kimetsu-no-yaiba-tanjirou-nezuko-zenitsu",
+      "title": "Mô hình Thanh gươm diệt quỷ Kimetsu no Yaiba – Tanjirou, Nezuko, Zenitsu, Inosuke, Giyu, Shinobu",
+      "description": "Mô hình nhân vật Thanh gươm diệt quỷ (Demon Slayer), nhiều nhân vật để lựa chọn.",
+      "attributes": [{ "name": "Chiều cao", "value": "12–15 cm" }, { "name": "Chất liệu", "value": "Nhựa PVC" }],
+      "collection": "kimetsu",
+      "category": "mini",
+      "tags": ["kimetsu no yaiba", "demon slayer", "tanjirou", "nezuko", "zenitsu", "inosuke", "shinobu", "giyu"],
+      "featured": 30,
+      "imageVideoIds": ["7499143655727336722", "7531592617755184391", "7531592805370563847", "7507422443791846663", "7560030663039094037", "7505300468239715605"],
+      "variants": ["Tanjirou", "Nezuko", "Zenitsu", "Inosuke", "Giyu", "Shinobu"],
+      "videoIds": ["7499143655727336722", "7531592617755184391", "7507422443791846663", "7506330873042586898", "7505300468239715605", "7531592805370563847", "7560030663039094037", "7571146763508141330", "7509523638320696594", "7571146172530691349", "7507834221172362503"]
+    }
+  ]
+}

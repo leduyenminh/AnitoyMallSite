@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "site-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "anitoy-reference",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "../AnitoyMall", "run", "dev", "--", "--port", "3001"],
+      "port": 3001
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+	"name": "anitoy-mall",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "cf dev",
+		"build": "cf build",
+		"deploy": "cf deploy",
+		"import": "node scripts/import-tiktok.mjs",
+		"test": "vitest run",
+		"typecheck": "cf workers types && tsc",
+		"check": "npm run typecheck && npm test"
+	},
+	"devDependencies": {
+		"@cloudflare/vite-plugin": "beta",
+		"cf": "^1.0.0-beta.26",
+		"typescript": "^7.0.2",
+		"vite": "^8.3.0",
+		"vitest": "^5.0.5"
+	},
+	"dependencies": {
+		"hono": "^4.13.16",
+		"qrcode-generator": "^2.0.4",
+		"zod": "^4.6.7"
+	},
+	"description": "Mall of Anitoy storefront on Cloudflare Workers + D1, catalog cloned from TikTok Shop",
+	"engines": {
+		"node": ">=24.22"
+	}
+}
