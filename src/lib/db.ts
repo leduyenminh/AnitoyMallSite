@@ -66,14 +66,18 @@ let ready: Promise<void> | null = null;
 
 /** Applies pending schema migrations and seeds the catalog on first use (once per isolate). */
 export function ensureDb(db: D1Database): Promise<void> {
-	ready ??= migrate(db).catch((error) => {
+	ready ??= migrateDb(db).catch((error) => {
 		ready = null;
 		throw error;
 	});
 	return ready;
 }
 
-async function migrate(db: D1Database) {
+/**
+ * Applies migrations in order and records the schema version. Migrations are append-only: never
+ * edit one that has shipped, add a new entry instead (CLAUDE.md, stored data).
+ */
+export async function migrateDb(db: D1Database) {
 	await db.prepare("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)").run();
 	const row = await db.prepare("SELECT v FROM meta WHERE k = 'schema'").first<{ v: string }>();
 	for (let version = Number(row?.v ?? 0); version < migrations.length; version++) {

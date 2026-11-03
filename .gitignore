@@ -12,3 +12,6 @@ dist/
 # Production secrets files and profiles
 secrets*.env
 *.cpuprofile
+
+# Claude Code hook state
+.claude/.cache/

@@ -60,7 +60,7 @@ Open http://localhost:5173. Back office: http://localhost:5173/admin (user `admi
 
 | Command | What it does |
 | --- | --- |
-| `npm run check` | Typecheck + unit tests |
+| `npm run check` | Typecheck, unit and database tests (in-memory SQLite with D1 semantics), browser-script syntax check |
 | `npm run import` | Re-clone listings from TikTok Shop into `src/data/catalog.json` and `public/media` |
 | `npm run build` | Production build into `.cloudflare/output/v0` |
 | `npm run deploy` | Build and deploy with `cf deploy` |
@@ -153,6 +153,10 @@ Deploy, then in `/admin → Sản phẩm` click **Cập nhật nội dung** (kee
 5. Turn on free listings and automatic item updates. Check **Needs attention** after the first fetch.
 
 The feed has one item per SKU (variants share `item_group_id`), with real stock (`in_stock` / `out_of_stock`), images and shipping. Product pages carry matching `Product` / `ProductGroup` JSON-LD.
+
+## Working on the code with Claude Code
+
+`CLAUDE.md` holds the rules for changing this shop (secrets, deploys, and the order, payment, stock and privacy invariants). `.claude/` enforces them: hooks block reading secrets or the local database, deploys and remote Cloudflare changes, risky git commands and edits that break an invariant; a Stop hook runs `npm run check` on changed code; the `invariant-reviewer` agent reviews a diff against the invariants.
 
 ## Project structure
 
