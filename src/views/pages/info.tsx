@@ -22,7 +22,7 @@ export function faq(s: Settings): { q: string; a: string }[] {
 		},
 		{
 			q: "Vì sao đơn của tôi tự huỷ?",
-			a: `Để không giữ hàng mãi cho đơn chưa hoàn tất, đơn ví/thẻ chưa thanh toán tự huỷ sau ${s.ttl.online} phút, đơn VietQR sau ${Math.round(s.ttl.bank / 60)} giờ, đơn COD chưa được shop xác nhận sau ${Math.round(s.ttl.cod / 60)} giờ. Bạn có thể đặt lại bất cứ lúc nào.`,
+			a: `Để không giữ hàng mãi cho đơn chưa hoàn tất, đơn VietQR chưa nhận được tiền tự huỷ sau ${Math.round(s.ttl.bank / 60)} giờ, đơn COD chưa được shop xác nhận sau ${Math.round(s.ttl.cod / 60)} giờ. Bạn có thể đặt lại bất cứ lúc nào.`,
 		},
 		{
 			q: "Hàng bị lỗi hoặc vỡ khi nhận thì sao?",
@@ -91,7 +91,7 @@ export function PolicyPage({ ctx }: { ctx: ViewCtx }) {
 						</li>
 					))}
 				</ul>
-				<p>Thanh toán ví và thẻ được xử lý bởi cổng thanh toán được cấp phép; website không lưu thông tin thẻ của bạn.</p>
+				<p>Tiền chuyển khoản vào thẳng tài khoản BIDV của shop, không qua trung gian. Shop không bao giờ hỏi thông tin thẻ hay mật khẩu ngân hàng của bạn.</p>
 			</section>
 			<section id="bao-mat" class="window card-pad">
 				<h2>Bảo mật thông tin</h2>
@@ -111,7 +111,7 @@ export function AboutPage({ ctx: _ctx, products }: { ctx: ViewCtx; products: Pro
 			<h1>Về {site.name}</h1>
 			<p>
 				{site.name} là shop mô hình anime chibi của TikTok <a href={site.tiktok.profileUrl}>@{site.tiktok.handle}</a>: {activeProducts(products).length} sản phẩm và{" "}
-				{videos.length} video mở hộp, decor thật. Website là nơi bạn đặt hàng trực tiếp với shop, thanh toán COD, VietQR, ví hoặc thẻ.
+				{videos.length} video mở hộp, decor thật. Website là nơi bạn đặt hàng trực tiếp với shop, thanh toán khi nhận hàng (COD) hoặc chuyển khoản VietQR vào tài khoản BIDV của shop.
 			</p>
 			<p>Các dòng sản phẩm: Frieren, Neko Kawaii (Osakana, Kinako), Kimetsu no Yaiba, Chainsaw Man, Honkai: Star Rail, Genshin Impact.</p>
 		</div>

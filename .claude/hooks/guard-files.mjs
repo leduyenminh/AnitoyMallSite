@@ -32,7 +32,9 @@ const PII_ARG = new RegExp(`(^|[{,(\\s])\\s*(\\.\\.\\.\\s*)?(${PII_KEYS})\\s*(?=
 const PII_MEMBER = /\.(customer|phone|email|address|accessToken|note|street|ward|content|description)\b|\bheader\s*\(|\bheaders\.get\s*\(|\bjson\s*\(\s*\)/;
 
 const PRIVATE_ROUTE = /app\.(get|post|all|use)\(\s*["'`]\/(don-hang|admin|thanh-toan|gio-hang|api\/)/;
-const SANDBOX = /test-payment\.momo\.vn|sb-openapi\.zalopay\.vn|sandbox\.vnpayment\.vn/;
+// The shop takes COD and VietQR to its BIDV account only (CLAUDE.md, Hard rules).
+const GATEWAY = /\b(momo|zalopay|zalo_?pay|vnpay|vnpayment|payoo|onepay|stripe|paypal|napas_?card|card)\b|MOMO_|ZALOPAY_|VNPAY_/i;
+const PAYMENT_METHOD_LINE = /PaymentMethod\s*=|paymentMethod:\s*z\.enum|enabledPaymentMethods/;
 
 /** File content after the edit, or null when it cannot be reconstructed. */
 function contentAfter(tool, input, file) {
@@ -201,9 +203,16 @@ function checkContent(rel, tool, input, file) {
 		if (removed.some((l) => /rateLimit\(|triggers\.scheduled|ORDER_TTL_/.test(l))) {
 			ask("The edit changes a rate limiter, the expiry cron or an order TTL (CLAUDE.md invariants 6 and 7).");
 		}
-		if (added.some((l) => /(MOMO_ENDPOINT|ZALOPAY_ENDPOINT|VNPAY_PAY_URL)\s*:/.test(l) && !SANDBOX.test(l))) {
-			ask("This points a payment gateway away from its sandbox. Only do this when the user is going live.");
+		if (removed.some((l) => /BANK_(ACCOUNT_NO|ACCOUNT_NAME|BIN)\s*:/.test(l))) {
+			ask("The edit changes the BIDV account that receives customers' VietQR transfers. Only the user decides this.");
 		}
+	}
+	const configCode = (inSrc && isCode && !isTest) || rel === "cloudflare.config.ts";
+	if (configCode && added.some((l) => GATEWAY.test(l) && (PAYMENT_METHOD_LINE.test(l) || /payments?\//.test(rel) || /\bsecret\(|ENDPOINT|PAY_URL|MOMO_|ZALOPAY_|VNPAY_/.test(l)))) {
+		ask("The edit looks like it adds a wallet, card or payment gateway. The shop takes only COD and VietQR to its BIDV account (CLAUDE.md, Hard rules).");
+	}
+	if (/^src\/lib\/(types|validation)\.ts$/.test(rel) && added.some((l) => PAYMENT_METHOD_LINE.test(l) && /["'](?!cod["']|vietqr["'])[a-z_]+["']/.test(l.replace(/^[^=:(]*[=:(]/, "")))) {
+		ask("The edit adds a payment method other than COD and VietQR (CLAUDE.md, Hard rules).");
 	}
 
 	// ---- stored data

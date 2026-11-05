@@ -95,7 +95,7 @@ export function CheckoutPage({ ctx }: { ctx: ViewCtx }) {
 								<label class="pay-method">
 									<input type="radio" name="paymentMethod" value={m} checked={i === 0} />
 									<span class={`pay-method__logo pay-badge--${m}`} aria-hidden="true">
-										{m === "cod" ? "COD" : m === "vietqr" ? "QR" : m === "momo" ? "MoMo" : m === "zalopay" ? "Zalo" : "VISA"}
+										{m === "cod" ? "COD" : "QR"}
 									</span>
 									<span>
 										<strong>{paymentLabels[m].title}</strong>
@@ -105,8 +105,8 @@ export function CheckoutPage({ ctx }: { ctx: ViewCtx }) {
 							))}
 						</div>
 						<p class="small muted">
-							Đơn chưa được thanh toán hoặc xác nhận sẽ tự huỷ sau{" "}
-							{s.ttl.online} phút (ví, thẻ){s.bank ? `, ${Math.round(s.ttl.bank / 60)} giờ (VietQR)` : ""} và {Math.round(s.ttl.cod / 60)} giờ (COD) để nhả hàng cho khách khác.
+							Đơn chưa được thanh toán hoặc xác nhận sẽ tự huỷ sau {s.bank ? `${Math.round(s.ttl.bank / 60)} giờ (VietQR) và ` : ""}
+							{Math.round(s.ttl.cod / 60)} giờ (COD) để nhả hàng cho khách khác.
 						</p>
 					</section>
 					{s.turnstile && <div class="cf-turnstile" data-sitekey={s.turnstile.siteKey} data-turnstile></div>}

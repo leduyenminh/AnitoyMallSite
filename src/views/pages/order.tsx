@@ -1,7 +1,6 @@
 import { raw } from "hono/html";
 import { paymentLabels } from "../../lib/config";
 import { formatVnd } from "../../lib/money";
-import { isOnlineMethod } from "../../lib/orders";
 import { qrSvg, vietQrPayload } from "../../lib/payments/vietqr";
 import type { Order, OrderEvent } from "../../lib/types";
 import { Icon } from "../icons";
@@ -22,7 +21,7 @@ const STEPS = ["pending", "confirmed", "shipped", "delivered"] as const;
 const dateTime = (iso: string) =>
 	new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(iso));
 
-export function OrderPage({ ctx, order, notice }: { ctx: ViewCtx; order: Order; notice?: "new" | "paid" | "failed" }) {
+export function OrderPage({ ctx, order, notice }: { ctx: ViewCtx; order: Order; notice?: "new" }) {
 	const { s } = ctx;
 	const cancelled = order.status === "cancelled";
 	const awaitingPayment = !cancelled && order.paymentStatus === "unpaid" && order.paymentMethod !== "cod";
@@ -36,16 +35,6 @@ export function OrderPage({ ctx, order, notice }: { ctx: ViewCtx; order: Order; 
 						<strong>Đặt hàng thành công!</strong>
 						<p>Lưu lại đường dẫn trang này hoặc mã đơn {order.id} để theo dõi đơn hàng.</p>
 					</div>
-				</div>
-			)}
-			{notice === "paid" && order.paymentStatus === "paid" && (
-				<div class="banner banner--success window">
-					<Icon name="check" size={22} /> <strong>Thanh toán thành công.</strong>
-				</div>
-			)}
-			{notice === "failed" && order.paymentStatus !== "paid" && (
-				<div class="banner banner--warn window">
-					<Icon name="close" size={22} /> <strong>Thanh toán chưa hoàn tất.</strong> Bạn có thể thử lại bên dưới.
 				</div>
 			)}
 
@@ -129,16 +118,6 @@ export function OrderPage({ ctx, order, notice }: { ctx: ViewCtx; order: Order; 
 								Quét mã bằng app ngân hàng hoặc ví bất kỳ. Giữ nguyên số tiền và nội dung <strong>{order.id}</strong>.{" "}
 								{s.sepayKey ? "Đơn được xác nhận tự động khi tiền về." : "Shop sẽ xác nhận ngay khi nhận được tiền."}
 							</p>
-						</section>
-					)}
-
-					{awaitingPayment && isOnlineMethod(order.paymentMethod) && (
-						<section class="window card-pad">
-							<h2>Thanh toán</h2>
-							<p class="muted">Đơn đang chờ thanh toán qua {paymentLabels[order.paymentMethod].title}.</p>
-							<button type="button" class="btn btn--accent btn--lg" data-pay-now>
-								Thanh toán {formatVnd(order.total)}
-							</button>
 						</section>
 					)}
 

@@ -24,7 +24,8 @@ import { checkoutSchema, isOrderCode, isValidEmail, normaliseOrderCode, normalis
 //   the stock in the same transaction (cancelOrder);
 // - every state change goes through saveOrder/cancelOrder with optimistic locking and appends
 //   to `history`;
-// - an online order is paid only after its gateway's signature and amount check out.
+// - an order is paid only when a bank transfer for its exact total arrives (SePay) or the seller
+//   confirms the money in /admin; COD is paid when the parcel is delivered.
 
 /** Unpaid, unconfirmed orders one phone number may have open at once. */
 export const MAX_OPEN_ORDERS_PER_PHONE = 3;
@@ -45,12 +46,8 @@ export const newOrderId = () => `MA${randomCode(ORDER_CODE_ALPHABET, 7)}`;
 
 /** Minutes an order may wait for payment or the seller's confirmation before it is released. */
 export function ttlMinutes(method: PaymentMethod, s: Settings): number {
-	if (method === "cod") return s.ttl.cod;
-	if (method === "vietqr") return s.ttl.bank;
-	return s.ttl.online;
+	return method === "cod" ? s.ttl.cod : s.ttl.bank;
 }
-
-export const isOnlineMethod = (m: PaymentMethod) => m === "momo" || m === "zalopay" || m === "card";
 
 export interface CreateContext {
 	ipHash: string | null;
@@ -193,7 +190,7 @@ export async function lookupOrder(db: D1Database, code: string, phoneInput: stri
 
 export type PaymentResult = "paid" | "already_paid" | "not_found" | "amount_mismatch";
 
-/** Marks an order paid from a verified payment. Idempotent: gateways retry and returns repeat. */
+/** Marks an order paid from a verified bank transfer. Idempotent: SePay retries webhooks. */
 export async function recordPayment(
 	db: D1Database,
 	orderId: string,
@@ -216,7 +213,6 @@ export async function recordPayment(
 			payment: {
 				provider: payment.provider,
 				ref: payment.ref,
-				attempts: order.payment?.attempts ?? 1,
 				...(payment.transactionId ? { transactionId: payment.transactionId } : {}),
 				paidAt: at,
 			},
@@ -236,11 +232,6 @@ export async function recordPayment(
 	throw new ConflictError(`Order ${orderId} kept changing while recording payment`);
 }
 
-/** Records a new gateway attempt before redirecting, so every attempt has a fresh reference. */
-export async function recordPaymentAttempt(db: D1Database, order: Order, provider: PaymentProvider, ref: string, attempts: number) {
-	return saveOrder(db, order, { ...order, payment: { provider, ref, attempts }, updatedAt: new Date().toISOString() });
-}
-
 export type OrderAction = "confirm" | "mark_paid" | "ship" | "deliver" | "cancel";
 
 const transitions: Record<Exclude<OrderAction, "mark_paid">, { from: OrderStatus[]; to: OrderStatus }> = {
@@ -252,7 +243,8 @@ const transitions: Record<Exclude<OrderAction, "mark_paid">, { from: OrderStatus
 
 export function allowedActions(order: Order): OrderAction[] {
 	const actions = (Object.keys(transitions) as (keyof typeof transitions)[]).filter((a) => transitions[a].from.includes(order.status)) as OrderAction[];
-	if (order.paymentStatus === "unpaid" && order.status !== "cancelled") actions.push("mark_paid");
+	// The seller confirms VietQR transfers by hand; COD becomes paid only when it is delivered.
+	if (order.paymentMethod === "vietqr" && order.paymentStatus === "unpaid" && order.status !== "cancelled") actions.push("mark_paid");
 	return actions;
 }
 
@@ -276,7 +268,7 @@ export async function applyOrderAction(db: D1Database, id: string, action: Order
 	}
 	if (action === "mark_paid") {
 		next.paymentStatus = "paid";
-		next.payment = { provider: order.paymentMethod === "vietqr" ? "bank" : (order.payment?.provider ?? "bank"), ref: "manual", attempts: order.payment?.attempts ?? 0, paidAt: at };
+		next.payment = { provider: "bank", ref: "manual", paidAt: at };
 		next.history.push({ status: "paid", at, note: "Shop xác nhận đã nhận tiền" });
 	} else {
 		next.status = transitions[action].to;
@@ -284,6 +276,7 @@ export async function applyOrderAction(db: D1Database, id: string, action: Order
 		// Cash on delivery is collected when the parcel is delivered.
 		if (action === "deliver" && order.paymentMethod === "cod" && order.paymentStatus === "unpaid") {
 			next.paymentStatus = "paid";
+			next.payment = { provider: "cod", ref: "delivery", paidAt: at };
 			next.history.push({ status: "paid", at, note: "COD" });
 		}
 	}

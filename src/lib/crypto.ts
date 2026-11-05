@@ -4,11 +4,6 @@ const encoder = new TextEncoder();
 
 const toHex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 
-export async function hmacHex(algorithm: "SHA-256" | "SHA-512", key: string, data: string): Promise<string> {
-	const cryptoKey = await crypto.subtle.importKey("raw", encoder.encode(key), { name: "HMAC", hash: algorithm }, false, ["sign"]);
-	return toHex(await crypto.subtle.sign("HMAC", cryptoKey, encoder.encode(data)));
-}
-
 export async function sha256Hex(data: string): Promise<string> {
 	return toHex(await crypto.subtle.digest("SHA-256", encoder.encode(data)));
 }

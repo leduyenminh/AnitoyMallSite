@@ -92,9 +92,18 @@ describe("placing orders", () => {
 		expect(await stockOf(db)).toBe(2);
 	});
 
-	it("only offers configured payment methods", async () => {
-		const db = await freshDb();
-		await expect(place(db, { paymentMethod: "momo" })).rejects.toMatchObject({ code: "invalid", details: { fields: ["paymentMethod"] } });
+	it("only takes COD and VietQR, and VietQR only once the bank account is set", async () => {
+		const db = await freshDb(5);
+		for (const paymentMethod of ["momo", "zalopay", "card"]) {
+			await expect(place(db, { paymentMethod })).rejects.toMatchObject({ code: "invalid", details: { fields: ["paymentMethod"] } });
+		}
+		const noBank = settings({} as unknown as Env);
+		await expect(createOrder(db, noBank, checkout({ paymentMethod: "vietqr" }), { ipHash: null, now: NOW })).rejects.toMatchObject({
+			code: "invalid",
+			details: { fields: ["paymentMethod"] },
+		});
+		expect(await stockOf(db)).toBe(5);
+		expect((await place(db, { paymentMethod: "vietqr" })).expiresAt).toBe(new Date(NOW.getTime() + s.ttl.bank * 60_000).toISOString());
 	});
 });
 
@@ -162,10 +171,36 @@ describe("payments", () => {
 		const order = await place(db, { paymentMethod: "vietqr" });
 		const tx = { id: 1001, accountNumber: "1234567890", content: `CT ${order.id} chuyen tien`, transferType: "in" as const, transferAmount: order.total };
 		expect(await handleBankTransaction(db, s, { ...tx, accountNumber: "9999999999" })).toBe("other_account");
+		expect(await handleBankTransaction(db, s, { ...tx, accountNumber: undefined })).toBe("other_account");
+		expect(await handleBankTransaction(db, settings({} as unknown as Env), tx)).toBe("other_account");
+		expect((await getOrder(db, order.id))?.paymentStatus).toBe("unpaid");
 		expect(await handleBankTransaction(db, s, { ...tx, transferType: "out" })).toBe("ignored");
 		expect(await handleBankTransaction(db, s, tx)).toBe("paid");
 		expect(await handleBankTransaction(db, s, tx)).toBe("duplicate");
 		expect((await getOrder(db, order.id))?.paymentStatus).toBe("paid");
+	});
+
+	it("lets the seller confirm a VietQR transfer by hand, which stops expiry", async () => {
+		const db = await freshDb();
+		const order = await place(db, { paymentMethod: "vietqr" });
+		const paid = await applyOrderAction(db, order.id, "mark_paid", order.version);
+		expect(paid.paymentStatus).toBe("paid");
+		expect(paid.payment).toMatchObject({ provider: "bank", ref: "manual" });
+		expect((await getOrder(db, order.id))?.expiresAt).toBeUndefined();
+		await expect(applyOrderAction(db, order.id, "mark_paid")).rejects.toBeInstanceOf(ConflictError);
+	});
+
+	it("marks COD paid only on delivery, never by hand before", async () => {
+		const db = await freshDb();
+		const order = await place(db);
+		await expect(applyOrderAction(db, order.id, "mark_paid")).rejects.toBeInstanceOf(ConflictError);
+		await applyOrderAction(db, order.id, "confirm");
+		const shipped = await applyOrderAction(db, order.id, "ship");
+		expect(shipped.paymentStatus).toBe("unpaid");
+		const delivered = await applyOrderAction(db, order.id, "deliver");
+		expect(delivered.paymentStatus).toBe("paid");
+		expect(delivered.payment).toMatchObject({ provider: "cod", ref: "delivery" });
+		expect(delivered.history.map((h) => h.status)).toEqual(["pending", "confirmed", "shipped", "delivered", "paid"]);
 	});
 });
 

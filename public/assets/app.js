@@ -499,7 +499,7 @@ function initCheckout() {
 		if (res.ok && res.data?.url) {
 			store.set(FORM_KEY, { name: get("name"), phone: get("phone"), email: get("email"), province: get("province"), ward: get("ward"), street: get("street") });
 			cart.clear();
-			location.href = res.data.payUrl || res.data.url;
+			location.href = res.data.url;
 			return;
 		}
 		const code = res.data?.error || (res.status === 429 ? "rate_limited" : "server_error");
@@ -553,16 +553,6 @@ function initOrder() {
 		tick();
 		setInterval(tick, 1000);
 	}
-
-	$("[data-pay-now]", root)?.addEventListener("click", async (e) => {
-		e.currentTarget.disabled = true;
-		const res = await api(`/api/orders/${id}/pay`, { token });
-		if (res.ok && res.data?.payUrl) location.href = res.data.payUrl;
-		else {
-			toast(res.status === 429 ? errorText.rate_limited : "Cổng thanh toán chưa sẵn sàng, vui lòng thử lại sau.");
-			e.currentTarget.disabled = false;
-		}
-	});
 
 	// Waiting for a transfer or the seller: refresh when the order changes.
 	if (root.dataset.poll && token) {

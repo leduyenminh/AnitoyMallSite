@@ -19,11 +19,11 @@ Never open `.dev.vars` (or any `.dev.vars*` except `.dev.vars.example`), `.env*`
 
 For each item, decide whether the diff touches it. If it does, verify it against the code:
 
-- **Money**: amounts are integer đồng; no float maths on stored or compared amounts; VNPay's × 100 handled only in `gateways.ts`.
+- **Money**: amounts are integer đồng; no float maths on stored or compared amounts; SePay amounts rounded once in `src/lib/payments/index.ts`.
 - **Pricing**: the order total comes from `buildQuote` inside `createOrder`, never from client input; client prices only flag `price_changed`; drafts, archived products and SKUs priced 0 can't be bought.
 - **Stock**: changes only in `placeOrder` (same batch as the order insert, protected by `CHECK (stock >= 0)`), `cancelOrder` (same batch as the status change, guarded by `last_op`) and `updateSku` (delta from the value the seller saw). No read-then-write; no absolute `SET stock = ?` from an earlier read.
 - **Order state**: changes go through the functions in `orders.ts`, saved with `saveOrder` / `cancelOrder` and an optimistic `version`; transitions respected; `history` only appended. Nothing else writes the `orders` table.
-- **Payments**: paid only after the gateway signature (or SePay `Apikey` + configured account + order code + exact amount) is verified, and only when `amount === order.total`; idempotent for retries, IPN plus browser return, and repeated bank transactions; return URLs not trusted without the signature; gateway endpoints still on sandbox unless the user asked.
+- **Payments**: methods are COD and VietQR to the user's BIDV account only (no wallet, card or gateway added, bank account unchanged unless the user asked); a VietQR order is paid only via a SePay webhook that passed the `Apikey`, configured account, order code and `amount === order.total` checks, or by the seller in `/admin`; COD only on delivery; each bank transaction processed once; nothing from the shopper's browser can mark an order paid.
 - **Expiry**: new pending unpaid orders get `expiresAt`; confirming or paying clears it; paid or confirmed orders never expire; the cron and `expireOrders` still release stock through `cancelOrder`.
 - **Spam limits**: endpoints that create or reveal orders still call `allow()` with their limiter; the per-phone and per-IP caps, honeypot and Turnstile check are intact.
 - **Personal data**: no customer fields, whole orders, bodies or headers in logs or errors; no `console.*` in `src/` outside `log.ts`; order view needs the access token (`safeEqual`); lookup stays masked; private pages and APIs are `no-store`, `noindex` and never edge-cached; IPs only as `ipHash()`; no personal data in JSON-LD, feed or sitemap; fixtures use fake data.

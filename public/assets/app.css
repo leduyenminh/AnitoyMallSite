@@ -1479,15 +1479,6 @@ textarea {
 .pay-badge--vietqr {
 	background: #1d4ed8;
 }
-.pay-badge--momo {
-	background: #a50064;
-}
-.pay-badge--zalopay {
-	background: #0068ff;
-}
-.pay-badge--card {
-	background: #1a1f71;
-}
 
 .lines,
 .summary__lines {

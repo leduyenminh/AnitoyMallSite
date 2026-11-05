@@ -1,5 +1,5 @@
-// Amounts are integers in whole đồng everywhere (VND has no minor unit). Gateways with other
-// units convert at their boundary (VNPay sends amount × 100).
+// Amounts are integers in whole đồng everywhere (VND has no minor unit). Amounts from outside
+// (the SePay webhook) are converted once, where they enter (src/lib/payments/index.ts).
 
 const vnd = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
 

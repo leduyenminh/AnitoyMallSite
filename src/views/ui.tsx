@@ -183,7 +183,7 @@ export function Perks({ s }: { s: Settings }) {
 	const items = [
 		{ icon: "truck", title: "Freeship", text: `Đơn từ ${formatVnd(s.shipping.freeThreshold)}` },
 		{ icon: "cash", title: "COD toàn quốc", text: "Kiểm tra rồi mới trả tiền" },
-		{ icon: "qr", title: "VietQR · Ví · Thẻ", text: "MoMo, ZaloPay, Visa/Master" },
+		{ icon: "qr", title: "Chuyển khoản VietQR", text: "Tiền về thẳng tài khoản BIDV của shop" },
 		{ icon: "tiktok", title: "Video thật", text: "Mọi sản phẩm đều có trên TikTok" },
 	];
 	return (

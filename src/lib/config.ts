@@ -39,14 +39,30 @@ export interface Settings {
 	bank: { bin: string; name: string; accountNo: string; accountName: string } | null;
 	contact: { phone?: string; email?: string; zalo?: string };
 	/** Minutes before an unconfirmed, unpaid order expires, per kind of payment. */
-	ttl: { online: number; bank: number; cod: number };
-	momo: { partnerCode: string; accessKey: string; secretKey: string; endpoint: string } | null;
-	zalopay: { appId: string; key1: string; key2: string; endpoint: string } | null;
-	vnpay: { tmnCode: string; hashSecret: string; payUrl: string } | null;
+	ttl: { bank: number; cod: number };
 	sepayKey: string | null;
 	turnstile: { siteKey: string; secret: string } | null;
 	imageResizing: boolean;
 	adminPassword: string | null;
+}
+
+/**
+ * Where a page request on www.<site> should be sent: the same path on the bare domain from
+ * SITE_URL, so search engines see one site. Only GET/HEAD page requests are redirected: a 301
+ * would turn a POST into a GET, and server-to-server callers such as the SePay webhook don't
+ * follow redirects, so /api/* is always answered where it was called.
+ */
+export function wwwRedirect(requestUrl: URL, siteUrl: string, method: string): string | null {
+	if (method !== "GET" && method !== "HEAD") return null;
+	if (requestUrl.pathname.startsWith("/api/")) return null;
+	let site: URL;
+	try {
+		site = new URL(siteUrl);
+	} catch {
+		return null;
+	}
+	if (requestUrl.hostname !== `www.${site.hostname}`) return null;
+	return `${site.origin}${requestUrl.pathname}${requestUrl.search}`;
 }
 
 /** Parsed settings. `origin` is the request origin, used when SITE_URL is not set. */
@@ -71,33 +87,7 @@ export function settings(env: Env, origin = "http://localhost:5173"): Settings {
 			email: trim(env.CONTACT_EMAIL) || undefined,
 			zalo: trim(env.CONTACT_ZALO) || undefined,
 		},
-		ttl: { online: num(env.ORDER_TTL_ONLINE, 30), bank: num(env.ORDER_TTL_BANK, 360), cod: num(env.ORDER_TTL_COD, 1440) },
-		momo:
-			env.MOMO_PARTNER_CODE && env.MOMO_ACCESS_KEY && env.MOMO_SECRET_KEY
-				? {
-						partnerCode: env.MOMO_PARTNER_CODE,
-						accessKey: env.MOMO_ACCESS_KEY,
-						secretKey: env.MOMO_SECRET_KEY,
-						endpoint: (trim(env.MOMO_ENDPOINT) || "https://test-payment.momo.vn").replace(/\/$/, ""),
-					}
-				: null,
-		zalopay:
-			env.ZALOPAY_APP_ID && env.ZALOPAY_KEY1 && env.ZALOPAY_KEY2
-				? {
-						appId: env.ZALOPAY_APP_ID,
-						key1: env.ZALOPAY_KEY1,
-						key2: env.ZALOPAY_KEY2,
-						endpoint: (trim(env.ZALOPAY_ENDPOINT) || "https://sb-openapi.zalopay.vn").replace(/\/$/, ""),
-					}
-				: null,
-		vnpay:
-			env.VNPAY_TMN_CODE && env.VNPAY_HASH_SECRET
-				? {
-						tmnCode: env.VNPAY_TMN_CODE,
-						hashSecret: env.VNPAY_HASH_SECRET,
-						payUrl: trim(env.VNPAY_PAY_URL) || "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html",
-					}
-				: null,
+		ttl: { bank: num(env.ORDER_TTL_BANK, 360), cod: num(env.ORDER_TTL_COD, 1440) },
 		sepayKey: env.SEPAY_API_KEY || null,
 		turnstile:
 			trim(env.TURNSTILE_SITE_KEY) && env.TURNSTILE_SECRET_KEY
@@ -108,21 +98,12 @@ export function settings(env: Env, origin = "http://localhost:5173"): Settings {
 	};
 }
 
-/** Checkout methods in display order; online ones appear once their gateway keys are set. */
+/** Checkout methods in display order: COD always, VietQR once the BIDV account is set. */
 export function enabledPaymentMethods(s: Settings): PaymentMethod[] {
-	return [
-		"cod",
-		...(s.bank ? (["vietqr"] as const) : []),
-		...(s.momo ? (["momo"] as const) : []),
-		...(s.zalopay ? (["zalopay"] as const) : []),
-		...(s.vnpay || s.zalopay ? (["card"] as const) : []),
-	];
+	return ["cod", ...(s.bank ? (["vietqr"] as const) : [])];
 }
 
 export const paymentLabels: Record<PaymentMethod, { title: string; hint: string }> = {
 	cod: { title: "Thanh toán khi nhận hàng (COD)", hint: "Trả tiền mặt cho shipper khi nhận hàng." },
 	vietqr: { title: "Chuyển khoản VietQR", hint: "Quét mã QR bằng app ngân hàng bất kỳ, tiền về thẳng tài khoản BIDV của shop." },
-	momo: { title: "Ví MoMo", hint: "Thanh toán bằng ví MoMo." },
-	zalopay: { title: "Ví ZaloPay", hint: "Thanh toán bằng ví ZaloPay." },
-	card: { title: "Thẻ tín dụng / ghi nợ", hint: "Visa, Mastercard, JCB – cổng thanh toán bảo mật." },
 };

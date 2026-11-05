@@ -107,7 +107,7 @@ export const checkoutSchema = z.object({
 		street: z.string().trim().min(3).max(200),
 	}),
 	note: z.string().trim().max(500).optional(),
-	paymentMethod: z.enum(["cod", "vietqr", "momo", "zalopay", "card"]),
+	paymentMethod: z.enum(["cod", "vietqr"]),
 	/** Honeypot: a field humans never see. Bots that fill it are rejected. */
 	website: z.string().max(200).optional(),
 	turnstileToken: z.string().max(4096).optional(),

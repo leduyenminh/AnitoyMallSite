@@ -58,8 +58,10 @@ export interface Video {
 }
 
 export type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
-export type PaymentMethod = "cod" | "vietqr" | "momo" | "zalopay" | "card";
-export type PaymentProvider = "momo" | "zalopay" | "vnpay" | "bank";
+/** Cash on delivery, or a VietQR transfer straight into the shop's BIDV account. */
+export type PaymentMethod = "cod" | "vietqr";
+/** How the money arrived: a bank transfer, or cash collected on delivery. */
+export type PaymentProvider = "bank" | "cod";
 export type PaymentStatus = "unpaid" | "paid";
 
 export interface OrderLine {
@@ -108,8 +110,8 @@ export interface Order {
 	total: number;
 	payment?: {
 		provider: PaymentProvider;
+		/** The bank transaction (sepay:<id>), "manual" when the seller confirmed a transfer, or "delivery" for COD. */
 		ref: string;
-		attempts: number;
 		transactionId?: string;
 		paidAt?: string;
 	};

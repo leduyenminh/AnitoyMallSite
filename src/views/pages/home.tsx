@@ -107,7 +107,7 @@ export function HomePage({ ctx, products }: { ctx: ViewCtx; products: Product[] 
 				<div class="trust__item window">
 					<Icon name="shield" size={28} />
 					<h3>Mua trực tiếp, an toàn</h3>
-					<p class="muted">Đặt hàng không cần tài khoản. Thanh toán COD, chuyển khoản VietQR, ví MoMo, ZaloPay hoặc thẻ.</p>
+					<p class="muted">Đặt hàng không cần tài khoản. Thanh toán khi nhận hàng (COD) hoặc chuyển khoản VietQR thẳng vào tài khoản BIDV của shop.</p>
 				</div>
 				<div class="trust__item window">
 					<Icon name="box" size={28} />

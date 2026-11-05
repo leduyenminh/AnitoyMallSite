@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import type { Child } from "hono/jsx";
 import { applyFilters, collectionName, relatedProducts, sortLabels, videoById, type Filters, type SortKey } from "./lib/catalog";
-import { categories, collections, settings, site, type Settings } from "./lib/config";
+import { categories, collections, settings, site, wwwRedirect, type Settings } from "./lib/config";
 import { safeEqual, sha256Hex } from "./lib/crypto";
 import {
 	catalogVersion,
@@ -18,9 +18,8 @@ import {
 } from "./lib/db";
 import { allow, clientIp, ipHash, verifyTurnstile } from "./lib/limits";
 import { log } from "./lib/log";
-import { applyOrderAction, CheckoutError, createOrder, expireOrders, getOrderForViewer, isOnlineMethod, lookupOrder, type OrderAction } from "./lib/orders";
-import { confirmGatewayPayment, handleBankTransaction, isGatewayProvider, orderIdFromRef, providerFor, sepayAuthorized, startPayment, verifyReturn } from "./lib/payments";
-import { momo, vnpay, zalopay } from "./lib/payments/gateways";
+import { applyOrderAction, CheckoutError, createOrder, expireOrders, getOrderForViewer, lookupOrder, type OrderAction } from "./lib/orders";
+import { handleBankTransaction, sepayAuthorized } from "./lib/payments";
 import { buildQuote } from "./lib/quote";
 import {
 	breadcrumbJsonLd,
@@ -65,7 +64,17 @@ const themeScriptHash = () =>
 
 app.use("*", async (c, next) => {
 	const url = new URL(c.req.url);
-	if (url.pathname.length > 1 && url.pathname.endsWith("/")) return c.redirect(url.pathname.replace(/\/+$/, "") + url.search, 301);
+	// Redirects may carry an order's access token in the query, so browsers must not keep them.
+	const www = wwwRedirect(url, c.env.SITE_URL ?? "", c.req.method);
+	if (www) {
+		c.header("Cache-Control", NO_STORE);
+		return c.redirect(www, 301);
+	}
+	if (url.pathname.length > 1 && url.pathname.endsWith("/")) {
+		// Absolute target: a relative "//evil.example" would send the shopper to another site.
+		c.header("Cache-Control", NO_STORE);
+		return c.redirect(`${url.origin}${url.pathname.replace(/\/+$/, "") || "/"}${url.search}`, 301);
+	}
 	c.set("s", settings(c.env, url.origin));
 	await ensureDb(c.env.DB);
 	await next();
@@ -134,7 +143,7 @@ app.get("/", edgeCache, async (c) => {
 		c,
 		{
 			title: `${site.name} – Mô hình anime chibi Frieren, Neko, móc khoá | Freeship, COD`,
-			description: "Shop mô hình anime chibi của TikTok @leduyenminh: Frieren, Fern, Stark, Neko kawaii, figure 20cm, móc khoá acrylic. COD toàn quốc, VietQR, MoMo, ZaloPay.",
+			description: "Shop mô hình anime chibi của TikTok @leduyenminh: Frieren, Fern, Stark, Neko kawaii, figure 20cm, móc khoá acrylic. COD toàn quốc hoặc chuyển khoản VietQR.",
 			canonical: "/",
 			jsonLd: storeJsonLd(s),
 		},
@@ -269,7 +278,7 @@ app.get("/video", edgeCache, async (c) =>
 app.get("/ho-tro", edgeCache, (c) =>
 	page(
 		c,
-		{ title: titled("Câu hỏi thường gặp"), description: "Giao hàng, thanh toán COD, VietQR, MoMo, ZaloPay, đổi trả tại Mall of Anitoy.", canonical: "/ho-tro", jsonLd: [faqJsonLd(faq(c.get("s")))] },
+		{ title: titled("Câu hỏi thường gặp"), description: "Giao hàng, thanh toán COD, chuyển khoản VietQR, đổi trả tại Mall of Anitoy.", canonical: "/ho-tro", jsonLd: [faqJsonLd(faq(c.get("s")))] },
 		<HelpPage ctx={viewCtx(c)} />,
 	),
 );
@@ -296,8 +305,7 @@ app.get("/thanh-toan", (c) => page(c, { title: titled("Thanh toán"), noindex: t
 app.get("/don-hang/:id", async (c) => {
 	const order = await getOrderForViewer(c.env.DB, c.req.param("id"), c.req.query("t"));
 	if (!order) return page(c, { title: titled("Không tìm thấy đơn hàng"), noindex: true }, <NotFoundPage ctx={viewCtx(c)} />, { status: 404 });
-	const payment = c.req.query("payment");
-	const notice = c.req.query("moi") === "1" ? "new" : payment === "paid" ? "paid" : payment === "failed" ? "failed" : undefined;
+	const notice = c.req.query("moi") === "1" ? "new" : undefined;
 	return page(c, { title: titled(`Đơn hàng ${order.id}`), noindex: true }, <OrderPage ctx={viewCtx(c)} order={order} notice={notice} />);
 });
 
@@ -378,14 +386,6 @@ app.post("/api/orders", async (c) => {
 			verifyHuman: s.turnstile ? (token) => verifyTurnstile(s.turnstile!.secret, token, ip) : undefined,
 		});
 		const url = `/don-hang/${order.id}?t=${encodeURIComponent(order.accessToken)}&moi=1`;
-		if (isOnlineMethod(order.paymentMethod)) {
-			try {
-				return c.json({ id: order.id, url, payUrl: await startPayment(c.env.DB, s, order, ip) }, 201, noStore);
-			} catch (error) {
-				log.error("payment.start_failed", { orderId: order.id, error: String(error) });
-				return c.json({ id: order.id, url: `${url}&payment=failed` }, 201, noStore);
-			}
-		}
 		return c.json({ id: order.id, url }, 201, noStore);
 	} catch (error) {
 		if (error instanceof CheckoutError) {
@@ -411,88 +411,7 @@ app.get("/api/orders/:id/status", async (c) => {
 	return c.json({ status: order.status, paymentStatus: order.paymentStatus, version: order.version }, 200, noStore);
 });
 
-app.post("/api/orders/:id/pay", async (c) => {
-	const s = c.get("s");
-	const ip = clientIp(c.req.raw);
-	if (!(await allow(c.env.ORDER_LIMITER, `pay:${ip}`))) return tooMany(c);
-	const body = (await c.req.json().catch(() => ({}))) as { token?: string };
-	const order = await getOrderForViewer(c.env.DB, c.req.param("id"), body.token);
-	if (!order) return c.json({ error: "not_found" }, 404, noStore);
-	if (order.status !== "pending" || order.paymentStatus !== "unpaid" || !providerFor(order.paymentMethod, s)) return c.json({ error: "not_payable" }, 409, noStore);
-	try {
-		return c.json({ payUrl: await startPayment(c.env.DB, s, order, ip) }, 200, noStore);
-	} catch (error) {
-		log.error("payment.start_failed", { orderId: order.id, error: String(error) });
-		return c.json({ error: "gateway_unavailable" }, 502, noStore);
-	}
-});
-
-// ------------------------------------------------------------------ payment callbacks
-
-/** MoMo IPN: JSON body, answered with 204. */
-app.post("/api/payments/momo/ipn", async (c) => {
-	const s = c.get("s");
-	if (!s.momo) return c.body(null, 404);
-	const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
-	const verified = body ? await momo.verify(s.momo, body) : null;
-	if (!verified) return c.body(null, 400);
-	if (verified.success) await confirmGatewayPayment(c.env.DB, "momo", verified);
-	return c.body(null, 204);
-});
-
-/** ZaloPay callback: { data, mac, type }, answered with return_code. */
-app.post("/api/payments/zalopay/ipn", async (c) => {
-	const s = c.get("s");
-	if (!s.zalopay) return c.body(null, 404);
-	const body = (await c.req.json().catch(() => null)) as { data?: string; mac?: string } | null;
-	const verified = body ? await zalopay.verifyCallback(s.zalopay, body) : null;
-	if (!verified) return c.json({ return_code: -1, return_message: "mac not equal" });
-	try {
-		await confirmGatewayPayment(c.env.DB, "zalopay", verified);
-		return c.json({ return_code: 1, return_message: "success" });
-	} catch (error) {
-		log.error("payment.ipn_failed", { provider: "zalopay", error: String(error) });
-		return c.json({ return_code: 0, return_message: "retry" });
-	}
-});
-
-/** VNPay IPN: GET with vnp_* params, answered with VNPay's RspCode. */
-app.get("/api/payments/vnpay/ipn", async (c) => {
-	const s = c.get("s");
-	if (!s.vnpay) return c.body(null, 404);
-	const verified = await vnpay.verify(s.vnpay, c.req.query());
-	if (!verified) return c.json({ RspCode: "97", Message: "Invalid signature" });
-	const order = await getOrder(c.env.DB, orderIdFromRef("vnpay", verified.ref));
-	if (!order) return c.json({ RspCode: "01", Message: "Order not found" });
-	if (verified.amount !== order.total) return c.json({ RspCode: "04", Message: "invalid amount" });
-	if (order.paymentStatus === "paid") return c.json({ RspCode: "02", Message: "Order already confirmed" });
-	if (!verified.success) return c.json({ RspCode: "00", Message: "Confirm Success" });
-	try {
-		await confirmGatewayPayment(c.env.DB, "vnpay", verified);
-		return c.json({ RspCode: "00", Message: "Confirm Success" });
-	} catch (error) {
-		log.error("payment.ipn_failed", { provider: "vnpay", error: String(error) });
-		return c.json({ RspCode: "99", Message: "Unknown error" });
-	}
-});
-
-/** The shopper's browser returning from a gateway. Trusted only after the signature checks out. */
-app.get("/api/payments/:provider/return", async (c) => {
-	const s = c.get("s");
-	const provider = c.req.param("provider");
-	if (!isGatewayProvider(provider)) return c.redirect("/", 302);
-	const verified = await verifyReturn(provider, s, c.req.query());
-	if (!verified) {
-		log.warn("payment.return_unverified", { provider });
-		return c.redirect("/", 302);
-	}
-	if (verified.success) await confirmGatewayPayment(c.env.DB, provider, verified);
-	const order = await getOrder(c.env.DB, orderIdFromRef(provider, verified.ref));
-	if (!order) return c.redirect("/", 302);
-	const outcome = order.paymentStatus === "paid" ? "paid" : "failed";
-	c.header("Cache-Control", NO_STORE);
-	return c.redirect(`/don-hang/${order.id}?t=${encodeURIComponent(order.accessToken)}&payment=${outcome}`, 302);
-});
+// ------------------------------------------------------------------ bank transfers
 
 /** SePay: incoming transfers on the BIDV account auto-confirm VietQR orders. */
 app.post("/api/webhooks/sepay", async (c) => {

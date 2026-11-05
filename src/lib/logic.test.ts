@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { fold, search, videoUploadedAt } from "./catalog";
-import { enabledPaymentMethods, settings } from "./config";
-import { hmacHex, randomCode, safeEqual } from "./crypto";
+import { enabledPaymentMethods, settings, wwwRedirect } from "./config";
+import { randomCode, safeEqual } from "./crypto";
 import { percentOff } from "./money";
-import { vnpaySignData } from "./payments/gateways";
 import { crc16, safeMemo, vietQrPayload } from "./payments/vietqr";
 import { buildQuote, shippingFor } from "./quote";
 import { escapeXml, googleFeed, productJsonLd } from "./seo";
@@ -123,23 +122,12 @@ describe("VietQR", () => {
 	});
 });
 
-describe("crypto and gateways", () => {
+describe("crypto", () => {
 	it("compares in constant time", () => {
 		expect(safeEqual("abc", "abc")).toBe(true);
 		expect(safeEqual("abc", "abd")).toBe(false);
 		expect(safeEqual("ABC", "abc", true)).toBe(true);
 		expect(safeEqual("abc", "abcd")).toBe(false);
-	});
-
-	it("computes HMAC-SHA256 like the gateways expect", async () => {
-		// RFC 4231 test case 2.
-		expect(await hmacHex("SHA-256", "Jefe", "what do ya want for nothing?")).toBe("5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843");
-	});
-
-	it("signs VNPay parameters sorted and URL-encoded with + for spaces", () => {
-		expect(vnpaySignData({ vnp_TxnRef: "MA3K7PQ2X01", vnp_Amount: "11894100", vnp_OrderInfo: "Thanh toan don hang", vnp_Empty: "" })).toBe(
-			"vnp_Amount=11894100&vnp_OrderInfo=Thanh+toan+don+hang&vnp_TxnRef=MA3K7PQ2X01",
-		);
 	});
 });
 
@@ -162,21 +150,36 @@ describe("catalog helpers", () => {
 });
 
 describe("settings", () => {
-	it("offers only COD until other methods are configured", () => {
+	it("offers COD, plus VietQR once the BIDV account is set, and nothing else", () => {
 		expect(enabledPaymentMethods(s)).toEqual(["cod"]);
 		const full = settings({
 			...env,
 			BANK_ACCOUNT_NO: "1234567890",
 			BANK_ACCOUNT_NAME: "NGUYEN VAN A",
+			// Leftover keys of the removed wallet and card gateways must not bring them back.
 			MOMO_PARTNER_CODE: "x",
-			MOMO_ACCESS_KEY: "x",
-			MOMO_SECRET_KEY: "x",
 			ZALOPAY_APP_ID: "1",
-			ZALOPAY_KEY1: "x",
-			ZALOPAY_KEY2: "x",
+			VNPAY_TMN_CODE: "x",
 		} as unknown as Env);
-		expect(enabledPaymentMethods(full)).toEqual(["cod", "vietqr", "momo", "zalopay", "card"]);
-		expect(full.bank?.bin).toBe("970418");
+		expect(enabledPaymentMethods(full)).toEqual(["cod", "vietqr"]);
+		expect(full.bank).toEqual({ bin: "970418", name: "BIDV", accountNo: "1234567890", accountName: "NGUYEN VAN A" });
+	});
+});
+
+describe("www redirect", () => {
+	const site = "https://anitoymall.com";
+	it("sends www page requests to the same path on the bare domain", () => {
+		expect(wwwRedirect(new URL("https://www.anitoymall.com/san-pham?sort=bestselling"), site, "GET")).toBe(
+			"https://anitoymall.com/san-pham?sort=bestselling",
+		);
+	});
+
+	it("leaves the bare domain, other hosts, POSTs and an unset SITE_URL alone", () => {
+		expect(wwwRedirect(new URL("https://anitoymall.com/"), site, "GET")).toBeNull();
+		expect(wwwRedirect(new URL("https://anitoy-mall.example.workers.dev/"), site, "GET")).toBeNull();
+		expect(wwwRedirect(new URL("https://www.anitoymall.com/api/webhooks/sepay"), site, "POST")).toBeNull();
+		expect(wwwRedirect(new URL("https://www.anitoymall.com/api/orders/MA3K7PQ2X/status?t=x"), site, "GET")).toBeNull();
+		expect(wwwRedirect(new URL("http://localhost:5173/"), "", "GET")).toBeNull();
 	});
 });
 

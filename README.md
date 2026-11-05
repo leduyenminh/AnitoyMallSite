@@ -4,7 +4,7 @@ Online shop for the TikTok seller **[Mall of Anitoy (@leduyenminh)](https://www.
 
 - **Catalog cloned from TikTok Shop** – `npm run import` reads each listing page (title, description, specifications, photos, SKUs, price, list price, stock, rating, units sold) and downloads the photos into `public/media/p`. Video covers come from TikTok's public oEmbed API.
 - **TikTok videos** play in TikTok's official embed player (loaded only on tap, so pages stay fast). Each product shows its videos and view counts.
-- **Payments**: COD, **VietQR** bank transfer straight into the shop's **BIDV** account (with optional automatic confirmation through SePay), **MoMo**, **ZaloPay** and **credit/debit cards** (VNPay, or ZaloPay's card gateway).
+- **Payments**: cash on delivery (COD) and **VietQR** bank transfer straight into the shop's **BIDV** account, with optional automatic confirmation through SePay. No wallets, cards or payment gateways: no money passes through a third party.
 - **Four themes**: Light, Dark, **Windows 95** (bevelled windows, title bars, taskbar with Start menu and clock) and **Frutiger Aero** (sky, bubbles, glass, glossy buttons). Follows the system light/dark by default; the choice is remembered and applied before first paint.
 - **E-commerce UX** in the style of Thế Giới Di Động / Shopee: big search, category bar, category tiles, best-seller rail, free-shipping meter, quick add, cart drawer, sticky mobile buy bar, bottom navigation on phones, guest checkout with the 34 provinces in force since 1 July 2025, order tracking and "Tra cứu đơn hàng".
 - **SEO**: server-rendered HTML, clean Vietnamese URLs, canonical links, Open Graph, JSON-LD (OnlineStore, WebSite + SearchAction, Product / ProductGroup with offers, shipping and return policy, BreadcrumbList, ItemList, FAQPage, VideoObject), `sitemap.xml` with images, `robots.txt`, and a **Google Merchant Center feed**.
@@ -22,7 +22,6 @@ flowchart LR
   W <--> D[(D1: products, SKUs,<br/>orders, bank transactions)]
   W --> RL[Rate Limiting bindings]
   CR[Cron every 5 min] --> W
-  W <-->|create / IPN / return| G[MoMo · ZaloPay · VNPay]
   S[SePay webhook<br/>BIDV transactions] --> W
   B -.->|click to play| T[TikTok embed player]
 ```
@@ -34,7 +33,7 @@ flowchart LR
 | Stock | An order and its stock decrement are one D1 batch; `CHECK (stock >= 0)` aborts an oversell. Cancelling or expiring an order returns stock in the same transaction, guarded so a lost race never restocks twice. |
 | Pricing | The server re-prices every cart (`buildQuote`) and again when the order is placed; client prices are only used to flag changes. |
 | Order state | Optimistic locking (`version`) on every write; history is append-only. |
-| Payments | An order is paid only after the gateway signature verifies and the amount equals the order total. Callbacks are idempotent. |
+| Payments | COD is paid on delivery. A VietQR order is paid when a transfer with its order code and exact total reaches the BIDV account (SePay webhook, processed once per transaction) or when the seller marks it paid in `/admin`. |
 | Caching | Catalog pages are cached at the edge, keyed by build and catalog version (seller edits show within ~30 s). Order, cart, checkout and admin pages are `no-store` and `noindex`. Static files get long-lived cache headers (`public/_headers`). |
 | Privacy | Order pages need the random token in their link; lookup returns masked name and phone only; logs carry ids and amounts only; IPs are stored as salted hashes. |
 
@@ -73,10 +72,10 @@ This project uses the `cf` CLI (`cloudflare.config.ts`), not Wrangler.
 
 1. **Sign in:** `npx cf auth login`.
 2. **Set your public settings** in `cloudflare.config.ts`:
-   - `BANK_ACCOUNT_NO` and `BANK_ACCOUNT_NAME` – your **BIDV** account number and the account holder name exactly as the bank shows it (upper case, no diacritics). VietQR appears at checkout once both are set.
-   - `SITE_URL` – your domain, e.g. `https://anitoy.vn` (used for canonical URLs, the feed and gateway return URLs).
+   - `BANK_ACCOUNT_NO` and `BANK_ACCOUNT_NAME` – your **BIDV** account number and the account holder name exactly as the bank shows it (upper case, no diacritics), in the production branch of the `dev ? … : …` expression (development keeps the fake account). VietQR appears at checkout once both are set.
+   - `SITE_URL` and `domains` – set to `https://anitoymall.com` with `anitoymall.com` and `www.anitoymall.com`. `SITE_URL` is used for canonical URLs, the sitemap and the feed; `www` page requests redirect to the bare domain.
    - `CONTACT_PHONE` / `CONTACT_EMAIL` / `CONTACT_ZALO`, shipping fee, free-shipping threshold, delivery time, `RETURN_DAYS`, and the order expiry times if you want other values.
-3. **Create a secrets file** (never commit it), e.g. `secrets.prod.env` with `ADMIN_PASSWORD=…` and any gateway keys from `.dev.vars.example`.
+3. **Create a secrets file** (never commit it), e.g. `secrets.prod.env` with `ADMIN_PASSWORD=…` and, optionally, `SEPAY_API_KEY` / `TURNSTILE_SECRET_KEY` (see `.dev.vars.example`).
 4. **Deploy:**
 
    ```bash
@@ -84,7 +83,7 @@ This project uses the `cf` CLI (`cloudflare.config.ts`), not Wrangler.
    ```
 
    `cf deploy` creates the D1 database `anitoy-mall` and the rate limiters on the first deploy. The tables are created and the catalog is seeded on the first request.
-5. **Custom domain:** add the domain to Cloudflare and attach it to the Worker (Workers & Pages → anitoy-mall → Settings → Domains & Routes). The edge page cache works on custom domains (not on `workers.dev`).
+5. **Custom domain:** the zone `anitoymall.com` must be active on the same Cloudflare account you deploy with. `cf deploy` attaches both hostnames from `domains` and creates their DNS records and certificates; if either hostname already has a DNS record, delete it first in the dashboard (DNS → Records). The edge page cache works on custom domains (not on `workers.dev`).
 6. **Protect `/admin` further (recommended):** put it behind Cloudflare Access (Zero Trust → Access → Applications → self-hosted, path `/admin*` and `/api/admin/*`). Basic auth stays as a second layer.
 
 Optional: set `IMAGE_RESIZING` to `"1"` after enabling Image Transformations on the zone, so photos are served resized as AVIF/WebP.
@@ -95,22 +94,15 @@ Optional: set `IMAGE_RESIZING` to `"1"` after enabling Image Transformations on 
 | --- | --- | --- |
 | COD | the carrier | Cash collected by the carrier, paid out to the shop |
 | **VietQR** | NAPAS 247, any banking app | **Directly into your BIDV account** – the QR carries your account, the exact amount and the order code |
-| MoMo | MoMo for Business | The bank account registered in the MoMo merchant portal – register your **BIDV** account there |
-| ZaloPay | ZaloPay merchant | The bank account registered with ZaloPay – your **BIDV** account |
-| Credit / debit card | VNPay (`INTCARD`), or ZaloPay's card gateway | The bank account registered with VNPay / ZaloPay – your **BIDV** account |
 
-Gateway keys go into the secrets file (`MOMO_*`, `ZALOPAY_*`, `VNPAY_*`). The endpoints in `cloudflare.config.ts` default to each provider's **sandbox**; switch them to production when your merchant accounts are approved. Register these callback URLs with the gateways:
-
-- MoMo IPN: `https://<domain>/api/payments/momo/ipn` (sent with every request)
-- ZaloPay callback: `https://<domain>/api/payments/zalopay/ipn` (sent with every request)
-- VNPay IPN: `https://<domain>/api/payments/vnpay/ipn` (set in the VNPay merchant portal)
+The shop takes no wallet or card payments.
 
 ### Automatic VietQR confirmation (SePay)
 
 Without it, you mark VietQR orders paid in `/admin` after checking your BIDV app. To confirm automatically:
 
 1. Create a [SePay](https://sepay.vn) account and link your BIDV account.
-2. Add a webhook to `https://<domain>/api/webhooks/sepay` with **API Key** authentication.
+2. Add a webhook to `https://anitoymall.com/api/webhooks/sepay` with **API Key** authentication.
 3. Put the key in your secrets file as `SEPAY_API_KEY` and redeploy.
 
 Incoming transfers are matched by the order code in the transfer memo and the exact amount; each transaction is processed once.
@@ -121,12 +113,12 @@ Incoming transfers are matched by the order code in the transfer memo and the ex
 | --- | --- |
 | Place order | 5 per minute per IP (Rate Limiting binding) |
 | Order lookup | 10 per minute per IP |
-| Quote / status / payment retry | 60 per minute per IP |
+| Quote / order status | 60 per minute per IP |
 | Open orders per phone number | 3 unpaid, unconfirmed orders at a time |
 | Orders per network | 8 per hour per (hashed) IP |
 | Bots | Hidden honeypot field; optional Turnstile (`TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY`) |
 
-Unpaid orders that the seller has not confirmed are **cancelled automatically and their stock released** by a cron every 5 minutes: wallet and card orders after 30 minutes, VietQR after 6 hours, COD after 24 hours (`ORDER_TTL_*`). Confirming a COD order or marking an order paid in `/admin` stops the clock. A payment that arrives after an order expired is still recorded and flagged in the order history for a refund or re-open.
+Unpaid orders that the seller has not confirmed are **cancelled automatically and their stock released** by a cron every 5 minutes: VietQR orders with no transfer after 6 hours, COD orders the seller hasn't confirmed after 24 hours (`ORDER_TTL_BANK`, `ORDER_TTL_COD`). Confirming a COD order or marking an order paid in `/admin` stops the clock. A payment that arrives after an order expired is still recorded and flagged in the order history for a refund or re-open.
 
 ## Catalog from TikTok Shop
 
@@ -146,10 +138,10 @@ Deploy, then in `/admin → Sản phẩm` click **Cập nhật nội dung** (kee
 
 ## Google Merchant Center and SEO
 
-1. Verify the domain in [Google Search Console](https://search.google.com/search-console) and submit `https://<domain>/sitemap.xml`.
+1. Verify the domain in [Google Search Console](https://search.google.com/search-console) and submit `https://anitoymall.com/sitemap.xml`.
 2. In [Merchant Center](https://merchants.google.com) (country Vietnam), verify and claim the website.
 3. Set **shipping** to match the site (Vietnam, VND, 30.000đ flat, free from 150.000đ, 2–5 days) and the **return policy** to match `RETURN_DAYS` (0 = no returns except damaged items).
-4. **Products → Add products → Add from a file → file link**: `https://<domain>/feeds/google.xml`, language Vietnamese, currency VND, daily fetch.
+4. **Products → Add products → Add from a file → file link**: `https://anitoymall.com/feeds/google.xml`, language Vietnamese, currency VND, daily fetch.
 5. Turn on free listings and automatic item updates. Check **Needs attention** after the first fetch.
 
 The feed has one item per SKU (variants share `item_group_id`), with real stock (`in_stock` / `out_of_stock`), images and shipping. Product pages carry matching `Product` / `ProductGroup` JSON-LD.
@@ -166,7 +158,7 @@ data/                    listings.json (TikTok Shop ids + merchandising), videos
 scripts/import-tiktok.mjs  clones listings and photos from TikTok Shop
 public/                  assets (CSS, JS), media (product photos, video covers), _headers
 src/index.tsx            routes, edge cache, security headers, admin auth, payment callbacks, cron
-src/lib/                 db (D1), orders, quote, payments (MoMo, ZaloPay, VNPay, VietQR, SePay),
+src/lib/                 db (D1), orders, quote, payments (VietQR payload, SePay bank webhook),
                          limits, seo (JSON-LD, feed, sitemap), catalog, config, validation
 src/views/               layout, components, pages (home, listing, product, checkout, order, info, admin)
 ```
