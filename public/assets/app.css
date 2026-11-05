@@ -1,6 +1,6 @@
 /* Mall of Anitoy – storefront styles.
    Palette: jade green + saffron (deliberately unlike TikTok's black / pink / cyan).
-   Themes: light (default), dark, win95 and aero (themes.css). */
+   Themes: light (default), dark and win95 (themes.css). */
 
 :root {
 	--font: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -539,9 +539,6 @@ textarea {
 .swatch--win95 {
 	background: linear-gradient(#000080 0 35%, #c0c0c0 35%);
 	border-radius: 0;
-}
-.swatch--aero {
-	background: radial-gradient(circle at 30% 30%, #fff 0 18%, transparent 20%), linear-gradient(160deg, #5ec8f2, #8be08f);
 }
 
 .catnav {
@@ -1585,10 +1582,6 @@ dd.totals__grand {
 }
 .banner--success .icon {
 	color: var(--ok);
-}
-.banner--warn {
-	border-color: var(--warn);
-	background: color-mix(in srgb, var(--warn) 12%, var(--surface));
 }
 .steps {
 	display: grid;

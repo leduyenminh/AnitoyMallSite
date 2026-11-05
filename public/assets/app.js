@@ -57,7 +57,10 @@ function toast(html, ms = 3200) {
 const THEME_KEY = "theme";
 const darkQuery = matchMedia("(prefers-color-scheme: dark)");
 
+const THEMES = ["system", "light", "dark", "win95"];
+
 function applyTheme(pref) {
+	if (!THEMES.includes(pref)) pref = "system";
 	const theme = pref === "system" ? (darkQuery.matches ? "dark" : "light") : pref;
 	document.documentElement.dataset.theme = theme;
 	document.documentElement.dataset.themePref = pref;

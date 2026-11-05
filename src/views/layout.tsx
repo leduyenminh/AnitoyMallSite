@@ -27,15 +27,15 @@ export interface PageMeta {
 	bodyClass?: string;
 }
 
-// Applied before first paint so a saved theme never flashes. "system" follows the OS light/dark.
-export const THEME_BOOT = `(function(){try{var p=localStorage.getItem("theme")||"system";var d=document.documentElement;var t=p==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):p;d.dataset.theme=t;d.dataset.themePref=p}catch(e){document.documentElement.dataset.theme="light"}})()`;
+// Applied before first paint so a saved theme never flashes. "system" follows the OS light/dark;
+// an unknown saved value (such as the removed "aero" theme) falls back to it.
+export const THEME_BOOT = `(function(){try{var p=localStorage.getItem("theme");if(!/^(light|dark|win95)$/.test(p||""))p="system";var d=document.documentElement;var t=p==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):p;d.dataset.theme=t;d.dataset.themePref=p}catch(e){document.documentElement.dataset.theme="light"}})()`;
 
 export const THEMES = [
 	{ id: "system", label: "Theo hệ thống" },
 	{ id: "light", label: "Sáng" },
 	{ id: "dark", label: "Tối" },
 	{ id: "win95", label: "Windows 95" },
-	{ id: "aero", label: "Frutiger Aero" },
 ] as const;
 
 const navLinks = (ctx: ViewCtx) => [
