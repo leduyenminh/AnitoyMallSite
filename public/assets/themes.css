@@ -132,6 +132,24 @@
 	background: #c0c0c0;
 	color: #000;
 }
+[data-theme="win95"] .pay-methods {
+	gap: 6px;
+	border: 0;
+	border-radius: 0;
+	overflow: visible;
+}
+[data-theme="win95"] .pay-method + .pay-method {
+	border-top: 0;
+}
+[data-theme="win95"] .pay-account {
+	background: #fff;
+	border: 0;
+	border-radius: 0;
+	box-shadow: var(--sunken);
+}
+[data-theme="win95"] .pay-account__bank {
+	border-radius: 0;
+}
 [data-theme="win95"] .btn--primary,
 [data-theme="win95"] .btn--accent {
 	font-weight: 700;

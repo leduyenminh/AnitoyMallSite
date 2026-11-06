@@ -1,5 +1,5 @@
 import type { Child } from "hono/jsx";
-import { collectionName, isSoldOut, leadSku, priceRange, productViews, tiktokVideoUrl } from "../lib/catalog";
+import { collectionName, isSoldOut, leadSku, priceRange, productViews, tiktokVideoUrl, unitsSold } from "../lib/catalog";
 import type { Settings } from "../lib/config";
 import { formatCount, formatVnd, percentOff } from "../lib/money";
 import { imageSrc, productPath } from "../lib/seo";
@@ -53,21 +53,28 @@ export function Price({ product, showTag = true }: { product: Product; showTag?:
 	);
 }
 
-/** Rating and units sold on TikTok Shop, attributed (not presented as this site's reviews). */
+/**
+ * The TikTok Shop rating, attributed (not presented as this site's reviews), and units sold on
+ * TikTok Shop and this website together.
+ */
 export function TikTokStats({ product, long = false }: { product: Product; long?: boolean }) {
 	const r = product.tiktokRating;
-	const sold = product.tiktokSold ?? 0;
+	const sold = unitsSold(product);
 	if (!r && !sold) return null;
 	return (
-		<p class="tt-stats" title="Đánh giá và lượt bán trên TikTok Shop">
+		<p class="tt-stats">
 			{r && (
-				<span class="tt-stats__rating">
+				<span class="tt-stats__rating" title="Đánh giá trên TikTok Shop">
 					<Icon name="star" size={14} /> {r.value.toFixed(1)}
-					{long && <span class="muted"> ({r.count} đánh giá)</span>}
+					{long && <span class="muted"> ({r.count} đánh giá trên TikTok Shop)</span>}
 				</span>
 			)}
-			{sold > 0 && <span>Đã bán {formatCount(sold)}</span>}
-			{long && <span class="muted">trên TikTok Shop</span>}
+			{sold > 0 && (
+				<span title="Gồm lượt bán trên TikTok Shop và website">
+					Đã bán {formatCount(sold)}
+					{long && <span class="muted"> trên TikTok Shop và website</span>}
+				</span>
+			)}
 		</p>
 	);
 }
@@ -183,8 +190,7 @@ export function Perks({ s }: { s: Settings }) {
 	const items = [
 		{ icon: "truck", title: "Freeship", text: `Đơn từ ${formatVnd(s.shipping.freeThreshold)}` },
 		{ icon: "cash", title: "COD toàn quốc", text: "Kiểm tra rồi mới trả tiền" },
-		{ icon: "qr", title: "Chuyển khoản VietQR", text: "Tiền về thẳng tài khoản BIDV của shop" },
-		{ icon: "tiktok", title: "Video thật", text: "Mọi sản phẩm đều có trên TikTok" },
+		{ icon: "qr", title: "Chuyển khoản VietQR", text: "Quét mã bằng app ngân hàng bất kỳ" },
 	];
 	return (
 		<ul class="perks">

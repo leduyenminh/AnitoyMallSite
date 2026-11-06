@@ -40,6 +40,8 @@ export interface Product {
 	/** Rating and units sold on TikTok Shop, shown with attribution (not as our own reviews). */
 	tiktokRating?: { value: number; count: number };
 	tiktokSold?: number;
+	/** Units sold on this website (orders confirmed, shipped, delivered or paid). Computed from orders, never stored. */
+	siteSold?: number;
 	videoIds: string[];
 	skus: Sku[];
 	createdAt: string;
@@ -88,6 +90,17 @@ export interface Customer {
 	email?: string;
 }
 
+/** A parcel booked with a carrier from /admin; its webhook updates the order. */
+export interface Shipment {
+	carrier: "ghn";
+	/** The carrier's tracking code. */
+	code: string;
+	/** The carrier's latest status, as the carrier names it (e.g. "delivering"). */
+	status: string;
+	bookedAt: string;
+	updatedAt?: string;
+}
+
 export interface OrderEvent {
 	status: OrderStatus | "paid" | "expired";
 	at: string;
@@ -110,12 +123,14 @@ export interface Order {
 	total: number;
 	payment?: {
 		provider: PaymentProvider;
-		/** The bank transaction (sepay:<id>), "manual" when the seller confirmed a transfer, or "delivery" for COD. */
+		/** The bank transaction (sepay:<id>), "manual" when the seller confirmed the money, "delivery" for COD the seller marked delivered, or ghn:<code> when GHN transferred the COD. */
 		ref: string;
 		transactionId?: string;
 		paidAt?: string;
 	};
 	history: OrderEvent[];
+	/** Set once the seller books the parcel with GHN (optional: older orders have none). */
+	shipment?: Shipment;
 	/** Unconfirmed, unpaid orders are cancelled at this time and their stock released. */
 	expiresAt?: string;
 	/** Optimistic-locking counter, bumped on every write. */

@@ -1,4 +1,6 @@
 import catalogFile from "../data/catalog.json";
+import { log } from "./log";
+import { type PricingRule, sitePrice } from "./pricing";
 import type { Order, Product, ProductStatus, Sku } from "./types";
 
 // D1 access. Products keep searchable columns plus a JSON `data` blob for content; SKUs are rows
@@ -65,8 +67,8 @@ const migrations: string[][] = [
 let ready: Promise<void> | null = null;
 
 /** Applies pending schema migrations and seeds the catalog on first use (once per isolate). */
-export function ensureDb(db: D1Database): Promise<void> {
-	ready ??= migrateDb(db).catch((error) => {
+export function ensureDb(db: D1Database, pricing: PricingRule): Promise<void> {
+	ready ??= migrateDb(db, pricing).catch((error) => {
 		ready = null;
 		throw error;
 	});
@@ -77,7 +79,7 @@ export function ensureDb(db: D1Database): Promise<void> {
  * Applies migrations in order and records the schema version. Migrations are append-only: never
  * edit one that has shipped, add a new entry instead (CLAUDE.md, stored data).
  */
-export async function migrateDb(db: D1Database) {
+export async function migrateDb(db: D1Database, pricing: PricingRule) {
 	await db.prepare("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)").run();
 	const row = await db.prepare("SELECT v FROM meta WHERE k = 'schema'").first<{ v: string }>();
 	for (let version = Number(row?.v ?? 0); version < migrations.length; version++) {
@@ -87,7 +89,7 @@ export async function migrateDb(db: D1Database) {
 		]);
 	}
 	const count = await db.prepare("SELECT COUNT(*) AS n FROM products").first<{ n: number }>();
-	if (!count?.n) await importCatalog(db, { commerce: true });
+	if (!count?.n) await importCatalog(db, { mode: "commerce", pricing });
 }
 
 // ------------------------------------------------------------------ catalog
@@ -120,11 +122,20 @@ function productData(p: Pick<Product, (typeof CONTENT_KEYS)[number]>) {
 }
 
 /**
- * Upserts the catalog file. New products and SKUs are inserted as they are. Existing ones get
- * fresh content (title, photos, description…); their status, slug, price and stock stay as the
- * seller set them unless `commerce` is true, which also copies TikTok's price, list price and stock.
+ * What an import overwrites on existing SKUs: `content` keeps the seller's prices and stock,
+ * `prices` also sets prices from TikTok (stock untouched), `commerce` sets prices and stock.
  */
-export async function importCatalog(db: D1Database, { commerce }: { commerce: boolean }) {
+export type ImportMode = "content" | "prices" | "commerce";
+
+/**
+ * Upserts the catalog file. New products and SKUs are inserted with prices from TikTok. Existing
+ * ones get fresh content (title, photos, description…); their status, slug, price and stock stay
+ * as the seller set them unless the mode says otherwise. The price is the site price computed from
+ * TikTok's list price (`sitePrice`); the list price stays as the struck-through price.
+ */
+export async function importCatalog(db: D1Database, { mode, pricing }: { mode: ImportMode; pricing: PricingRule }) {
+	const overwrite =
+		mode === "commerce" ? ", price = excluded.price, compare_at = excluded.compare_at, stock = excluded.stock" : mode === "prices" ? ", price = excluded.price, compare_at = excluded.compare_at" : "";
 	const now = new Date().toISOString();
 	const statements: D1PreparedStatement[] = [];
 	for (const p of catalogSource.products) {
@@ -137,16 +148,18 @@ export async function importCatalog(db: D1Database, { commerce }: { commerce: bo
 				.bind(p.id, p.slug, p.status, p.featured, productData(p), now),
 		);
 		for (const s of p.skus) {
+			const price = sitePrice(s.compareAtPrice ?? s.price, pricing);
+			const compareAt = s.compareAtPrice && s.compareAtPrice > price ? s.compareAtPrice : null;
+			// "prices" never resets a price the seller set on an item TikTok has no price for.
+			const sets = mode === "prices" && price <= 0 ? "" : overwrite;
 			statements.push(
 				db
 					.prepare(
 						`INSERT INTO skus (id, product_id, name, price, compare_at, stock, position, image, tiktok_sku_id)
 						 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-						 ON CONFLICT (id) DO UPDATE SET name = excluded.name, image = excluded.image, position = excluded.position${
-								commerce ? ", price = excluded.price, compare_at = excluded.compare_at, stock = excluded.stock" : ""
-							}`,
+						 ON CONFLICT (id) DO UPDATE SET name = excluded.name, image = excluded.image, position = excluded.position${sets}`,
 					)
-					.bind(s.id, p.id, s.name, s.price, s.compareAtPrice ?? null, s.stock, s.position, s.image ?? null, s.tiktokSkuId ?? null),
+					.bind(s.id, p.id, s.name, price, compareAt, s.stock, s.position, s.image ?? null, s.tiktokSkuId ?? null),
 			);
 		}
 	}
@@ -189,40 +202,76 @@ const skuFromRow = (r: SkuRow): Sku => ({
 	...(r.tiktok_sku_id ? { tiktokSkuId: r.tiktok_sku_id } : {}),
 });
 
-function assemble(rows: ProductRow[], skuRows: SkuRow[]): Product[] {
+function assemble(rows: ProductRow[], skuRows: SkuRow[], soldRows: SoldRow[] = []): Product[] {
 	const skus = new Map<string, Sku[]>();
 	for (const r of skuRows) {
 		const list = skus.get(r.product_id) ?? [];
 		list.push(skuFromRow(r));
 		skus.set(r.product_id, list);
 	}
+	const sold = new Map(soldRows.map((r) => [r.product_id, Math.max(0, Math.trunc(Number(r.sold) || 0))]));
 	return rows.map((r) => ({
 		...(JSON.parse(r.data) as Omit<Product, "id" | "slug" | "status" | "featured" | "skus" | "createdAt" | "updatedAt">),
 		id: r.id,
 		slug: r.slug,
 		status: r.status,
 		featured: r.featured,
+		...(sold.get(r.id) ? { siteSold: sold.get(r.id) } : {}),
 		skus: (skus.get(r.id) ?? []).sort((a, b) => a.position - b.position),
 		createdAt: r.created_at,
 		updatedAt: r.updated_at,
 	}));
 }
 
+interface SoldRow {
+	product_id: string;
+	sold: number;
+}
+
+/**
+ * Units sold on this website per product: lines of orders the seller confirmed (or later), plus
+ * pending orders already paid. Unconfirmed unpaid orders and cancelled ones don't count.
+ */
+const SOLD_ON_SITE = `SELECT json_extract(l.value, '$.productId') AS product_id, SUM(json_extract(l.value, '$.quantity')) AS sold
+	FROM orders, json_each(orders.data, '$.lines') AS l
+	WHERE orders.status IN ('confirmed', 'shipped', 'delivered') OR (orders.status = 'pending' AND orders.payment_status = 'paid')
+	GROUP BY product_id`;
+
+// The sold-count query scans every order, so it runs on its own, at most once an hour per isolate
+// (a failure is retried after a minute), and a failure only leaves the counts out.
+let soldCache: { at: number; ttl: number; rows: SoldRow[] } | null = null;
+const SOLD_TTL_MS = 60 * 60_000;
+const SOLD_RETRY_MS = 60_000;
+
+async function siteSoldRows(db: D1Database): Promise<SoldRow[]> {
+	if (soldCache && Date.now() - soldCache.at < soldCache.ttl) return soldCache.rows;
+	try {
+		const { results } = await db.prepare(SOLD_ON_SITE).all<SoldRow>();
+		soldCache = { at: Date.now(), ttl: SOLD_TTL_MS, rows: results };
+	} catch {
+		log.warn("site_sold_failed");
+		soldCache = { at: Date.now(), ttl: SOLD_RETRY_MS, rows: soldCache?.rows ?? [] };
+	}
+	return soldCache.rows;
+}
+
 let catalogCache: { at: number; products: Product[] } | null = null;
 const CATALOG_TTL_MS = 15_000;
 
-export function invalidateCatalog() {
+/** Drops the cached catalog; `sold` also drops the cached site sales (tests, or a fresh count). */
+export function invalidateCatalog({ sold = false }: { sold?: boolean } = {}) {
 	catalogCache = null;
+	if (sold) soldCache = null;
 }
 
 /** Every product (all statuses), cached briefly per isolate. Checkout re-reads stock uncached. */
 export async function loadCatalog(db: D1Database): Promise<Product[]> {
 	if (catalogCache && Date.now() - catalogCache.at < CATALOG_TTL_MS) return catalogCache.products;
-	const [products, skus] = await db.batch<ProductRow | SkuRow>([
-		db.prepare("SELECT * FROM products"),
-		db.prepare("SELECT * FROM skus"),
+	const [[products, skus], sold] = await Promise.all([
+		db.batch<ProductRow | SkuRow>([db.prepare("SELECT * FROM products"), db.prepare("SELECT * FROM skus")]),
+		siteSoldRows(db),
 	]);
-	const result = assemble(products!.results as ProductRow[], skus!.results as SkuRow[]);
+	const result = assemble(products!.results as ProductRow[], skus!.results as SkuRow[], sold);
 	catalogCache = { at: Date.now(), products: result };
 	return result;
 }

@@ -9,4 +9,10 @@ interface Env {
 	SEPAY_API_KEY?: string;
 
 	TURNSTILE_SECRET_KEY?: string;
+
+	/** GHN API token (khachhang.ghn.vn): prices delivery inside Ho Chi Minh City. */
+	GHN_TOKEN?: string;
+
+	/** Random value GHN sends as the X-Webhook-Token header of order status callbacks. */
+	GHN_WEBHOOK_SECRET?: string;
 }

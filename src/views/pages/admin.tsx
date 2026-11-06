@@ -111,7 +111,7 @@ export function AdminOrders({ orders, counts, status, q }: { orders: Order[]; co
 	);
 }
 
-export function AdminOrder({ order }: { order: Order }) {
+export function AdminOrder({ order, canBookGhn }: { order: Order; canBookGhn: boolean }) {
 	const actions = allowedActions(order);
 	return (
 		<>
@@ -131,8 +131,24 @@ export function AdminOrder({ order }: { order: Order }) {
 									{actionLabels[a]}
 								</button>
 							))}
+							{canBookGhn && (
+								<button
+									type="button"
+									class="btn btn--primary"
+									data-book-ghn
+									data-confirm="Tạo vận đơn GHN cho đơn này? Tên, số điện thoại, địa chỉ và ghi chú của khách sẽ được gửi cho GHN."
+								>
+									Tạo vận đơn GHN
+								</button>
+							)}
 						</div>
 						<p class="form-error" data-form-error hidden></p>
+						{order.shipment && (
+							<p>
+								GHN: <strong class="mono">{order.shipment.code}</strong> · {order.shipment.status}
+								{order.paymentMethod === "cod" && order.paymentStatus === "unpaid" ? " · COD được ghi nhận khi GHN chuyển tiền" : ""}
+							</p>
+						)}
 						<p class="small muted">
 							{paymentLabels[order.paymentMethod].title} · {order.paymentStatus === "paid" ? "đã thanh toán" : "chưa thanh toán"}
 							{order.payment?.transactionId ? ` · mã GD ${order.payment.transactionId}` : ""}
@@ -202,6 +218,9 @@ export function AdminProducts({ products }: { products: Product[] }) {
 				</p>
 				<button type="button" class="btn btn--ghost" data-import="content">
 					Cập nhật nội dung (giữ giá & tồn kho)
+				</button>
+				<button type="button" class="btn btn--ghost" data-import="prices" data-confirm="Đặt lại giá mọi sản phẩm có trên TikTok Shop = giá niêm yết TikTok trừ phí TikTok (giữ tồn kho)?">
+					Áp dụng giá từ TikTok (trừ phí, giữ tồn kho)
 				</button>
 				<button type="button" class="btn btn--ghost" data-import="commerce" data-confirm="Ghi đè giá và tồn kho bằng số liệu TikTok Shop?">
 					Cập nhật cả giá & tồn kho từ TikTok

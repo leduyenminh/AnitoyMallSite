@@ -1,3 +1,5 @@
+import { type PricingRule, pricingRule } from "./pricing";
+import type { GhnConfig, Parcel, ShippingSettings } from "./shipping";
 import type { PaymentMethod } from "./types";
 
 export const site = {
@@ -34,7 +36,9 @@ const num = (value: string | undefined, fallback: number) => {
 
 export interface Settings {
 	siteUrl: string;
-	shipping: { fee: number; freeThreshold: number; eta: string };
+	/** How website prices are derived from TikTok prices (src/lib/pricing.ts). */
+	pricing: PricingRule;
+	shipping: ShippingSettings;
 	returnDays: number;
 	bank: { bin: string; name: string; accountNo: string; accountName: string } | null;
 	contact: { phone?: string; email?: string; zalo?: string };
@@ -65,6 +69,35 @@ export function wwwRedirect(requestUrl: URL, siteUrl: string, method: string): s
 	return `${site.origin}${requestUrl.pathname}${requestUrl.search}`;
 }
 
+/** One packed item when the setting is missing or malformed: under 200 g in a 20×10×10 cm box. */
+export const DEFAULT_PARCEL: Parcel = { weight: 200, length: 20, width: 10, height: 10 };
+
+/** Parses a weight in grams and "20x10x10" (cm); falls back to `fallback` when malformed. */
+export function parseParcel(weight: string | undefined, size: string | undefined, fallback: Parcel = DEFAULT_PARCEL): Parcel {
+	const w = Number((weight ?? "").trim());
+	const dims = (size ?? "").trim().toLowerCase().split("x").map(Number);
+	const ok = (n: number, max: number) => Number.isInteger(n) && n > 0 && n <= max;
+	if (!ok(w, 50_000) || dims.length !== 3 || !dims.every((d) => ok(d, 200))) return fallback;
+	const [length, width, height] = dims as [number, number, number];
+	return { weight: w, length, width, height };
+}
+
+/** GHN is used once its token, shop id and the shop's phone are all set. */
+function ghnConfig(env: Env): GhnConfig | null {
+	const token = (env.GHN_TOKEN ?? "").trim();
+	const shopId = Number((env.GHN_SHOP_ID ?? "").trim());
+	const phone = (env.SHIP_FROM_PHONE ?? "").trim();
+	if (!token || !Number.isSafeInteger(shopId) || shopId <= 0 || !phone) return null;
+	return {
+		apiUrl: ((env.GHN_API_URL ?? "").trim() || "https://online-gateway.ghn.vn").replace(/\/$/, ""),
+		token,
+		shopId,
+		previewName: site.name,
+		previewPhone: phone,
+		webhookSecret: (env.GHN_WEBHOOK_SECRET ?? "").trim() || null,
+	};
+}
+
 /** Parsed settings. `origin` is the request origin, used when SITE_URL is not set. */
 export function settings(env: Env, origin = "http://localhost:5173"): Settings {
 	const trim = (v: string | undefined) => (v ?? "").trim();
@@ -72,10 +105,13 @@ export function settings(env: Env, origin = "http://localhost:5173"): Settings {
 	const bankAccountName = trim(env.BANK_ACCOUNT_NAME);
 	return {
 		siteUrl: (trim(env.SITE_URL) || origin).replace(/\/$/, ""),
+		pricing: pricingRule(env.TIKTOK_FEE_BPS, env.TIKTOK_FIXED_FEE, env.PRICE_ROUNDING),
 		shipping: {
 			fee: num(env.SHIPPING_FEE, 30000),
 			freeThreshold: num(env.FREE_SHIPPING_THRESHOLD, 150000),
 			eta: trim(env.DELIVERY_ETA) || "2–5",
+			parcel: parseParcel(env.PARCEL_WEIGHT_G, env.PARCEL_SIZE_CM),
+			ghn: ghnConfig(env),
 		},
 		returnDays: num(env.RETURN_DAYS, 0),
 		bank:

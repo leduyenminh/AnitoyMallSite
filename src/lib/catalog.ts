@@ -9,6 +9,9 @@ export const activeProducts = (products: Product[]) => products.filter((p) => p.
 export const totalStock = (p: Product) => p.skus.reduce((n, s) => n + s.stock, 0);
 export const isSoldOut = (p: Product) => totalStock(p) <= 0;
 
+/** Units sold on TikTok Shop plus units sold on this website. */
+export const unitsSold = (p: Product) => (p.tiktokSold ?? 0) + (p.siteSold ?? 0);
+
 /** Cheapest SKU in stock (or cheapest overall when sold out): what a card shows. */
 export function leadSku(p: Product): Sku | undefined {
 	const pool = p.skus.filter((s) => s.stock > 0);
@@ -69,7 +72,7 @@ export function sortProducts(products: Product[], sort: SortKey, videos: Map<str
 	const popularity = (p: Product) => p.videoIds.reduce((n, id) => n + (videos.get(id)?.views ?? 0), 0);
 	const by: Record<SortKey, (a: Product, b: Product) => number> = {
 		featured: (a, b) => soldOutLast(a, b) || b.featured - a.featured || popularity(b) - popularity(a),
-		bestselling: (a, b) => soldOutLast(a, b) || (b.tiktokSold ?? 0) - (a.tiktokSold ?? 0) || popularity(b) - popularity(a),
+		bestselling: (a, b) => soldOutLast(a, b) || unitsSold(b) - unitsSold(a) || popularity(b) - popularity(a),
 		newest: (a, b) => b.createdAt.localeCompare(a.createdAt),
 		"price-asc": (a, b) => soldOutLast(a, b) || price(a) - price(b),
 		"price-desc": (a, b) => soldOutLast(a, b) || price(b) - price(a),

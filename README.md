@@ -75,7 +75,7 @@ This project uses the `cf` CLI (`cloudflare.config.ts`), not Wrangler.
    - `BANK_ACCOUNT_NO` and `BANK_ACCOUNT_NAME` – your **BIDV** account number and the account holder name exactly as the bank shows it (upper case, no diacritics), in the production branch of the `dev ? … : …` expression (development keeps the fake account). VietQR appears at checkout once both are set.
    - `SITE_URL` and `domains` – set to `https://anitoymall.com` with `anitoymall.com` and `www.anitoymall.com`. `SITE_URL` is used for canonical URLs, the sitemap and the feed; `www` page requests redirect to the bare domain.
    - `CONTACT_PHONE` / `CONTACT_EMAIL` / `CONTACT_ZALO`, shipping fee, free-shipping threshold, delivery time, `RETURN_DAYS`, and the order expiry times if you want other values.
-3. **Create a secrets file** (never commit it), e.g. `secrets.prod.env` with `ADMIN_PASSWORD=…` and, optionally, `SEPAY_API_KEY` / `TURNSTILE_SECRET_KEY` (see `.dev.vars.example`).
+3. **Create a secrets file** (never commit it), e.g. `secrets.prod.env` with `ADMIN_PASSWORD=…` and, optionally, `SEPAY_API_KEY` / `TURNSTILE_SECRET_KEY` / `GHN_TOKEN` / `GHN_WEBHOOK_SECRET` (see `.dev.vars.example`).
 4. **Deploy:**
 
    ```bash
@@ -106,6 +106,24 @@ Without it, you mark VietQR orders paid in `/admin` after checking your BIDV app
 3. Put the key in your secrets file as `SEPAY_API_KEY` and redeploy.
 
 Incoming transfers are matched by the order code in the transfer memo and the exact amount; each transaction is processed once.
+
+## Prices and shipping
+
+**Prices.** A website price is the TikTok list price (the struck-through price when the listing has a TikTok discount) minus TikTok's fees: `TIKTOK_FEE_BPS` (fees in basis points, now 2751 = 6% transaction + 13% commission + 5% Voucher Xtra + ≈3.51% affiliate, from a TikTok settlement), `TIKTOK_FIXED_FEE` (the 3,000đ order processing fee) and `PRICE_ROUNDING` (round to the nearest 1,000đ) in `cloudflare.config.ts`. Taxes TikTok withholds are not deducted. The rule applies when TikTok prices are copied into the database: on the first seed, and from `/admin/san-pham` → **Áp dụng giá từ TikTok** (prices only, stock untouched). Prices you edit in `/admin` stay until you press it again.
+
+**Shipping.** Orders from `FREE_SHIPPING_THRESHOLD` ship free. Inside Ho Chi Minh City GHN prices each order by ward (checkout offers GHN's ward list); other provinces pay the flat `SHIPPING_FEE` until Viettel Post is connected, and so does HCM when GHN can't be reached. A parcel is `PARCEL_WEIGHT_G` and `PARCEL_SIZE_CM` per item, stacked. To turn GHN on:
+
+1. Put your GHN token in `.dev.vars` (local) and your secrets file as `GHN_TOKEN`.
+2. Set `GHN_SHOP_ID` (your shop's id at khachhang.ghn.vn) and `SHIP_FROM_PHONE` (the shop's phone) in `cloudflare.config.ts`. `GHN_API_URL` is GHN's production API; set it to `https://dev-online-gateway.ghn.vn` to try GHN's staging account first.
+
+GHN quotes use its "Preview Order" dry run with the shop as recipient: no order is created and no customer data is sent.
+
+**GHN parcels and webhook.** On a confirmed HCM order (COD, or VietQR already paid), `/admin` shows **Tạo vận đơn GHN**: it books the parcel through the GHN API with our order code as GHN's client order code, the customer's name, phone, address and note, and for COD the order total to collect. While a parcel is booked, cancel it in GHN's app before cancelling the order here. GHN then reports progress to `/api/webhooks/ghn`:
+
+1. Generate a random value (e.g. `openssl rand -hex 32`) and put it in `.dev.vars` and your secrets file as `GHN_WEBHOOK_SECRET`.
+2. At developer.ghn.vn → account menu → **Webhook configuration** → **Order**, enter `https://anitoymall.com/api/webhooks/ghn` and add the custom header `X-Webhook-Token` with that value. GHN takes about 15 minutes to apply it.
+
+Picked up → the order is shipped; delivered → delivered; a COD order becomes paid only when GHN reports transferring the COD for exactly the order total (or when you press **Đã nhận tiền**). Returns, cancellations and losses are recorded on the order for you to handle. Viettel Post (outside HCM) is not connected yet: it needs a partner account at partner.viettelpost.vn.
 
 ## Spam protection and order expiry
 

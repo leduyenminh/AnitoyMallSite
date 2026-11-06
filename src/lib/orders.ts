@@ -15,17 +15,19 @@ import {
 } from "./db";
 import { log } from "./log";
 import { buildQuote, type Quote } from "./quote";
+import { GHN_IN_TRANSIT, ghnCreateOrder, ghnWards, matchWard, parcelFor, priceShipping, ShippingAddressError } from "./shipping";
 import type { Order, OrderEvent, OrderStatus, PaymentMethod, PaymentProvider } from "./types";
-import { checkoutSchema, isOrderCode, isValidEmail, normaliseOrderCode, normalisePhone, ORDER_CODE_ALPHABET } from "./validation";
+import { checkoutSchema, HCM_PROVINCE, isOrderCode, isValidEmail, normaliseOrderCode, normalisePhone, ORDER_CODE_ALPHABET } from "./validation";
 
 // Order workflow. Invariants:
-// - the server prices every order (buildQuote) right before placing it;
+// - the server prices every order (buildQuote, then priceShipping) right before placing it;
 // - an order and its stock decrement are one D1 transaction (placeOrder), and cancelling returns
 //   the stock in the same transaction (cancelOrder);
 // - every state change goes through saveOrder/cancelOrder with optimistic locking and appends
 //   to `history`;
 // - an order is paid only when a bank transfer for its exact total arrives (SePay) or the seller
-//   confirms the money in /admin; COD is paid when the parcel is delivered.
+//   confirms the money in /admin; COD is paid when the seller marks the parcel delivered, or, for
+//   a parcel booked with GHN, when GHN reports transferring the COD for the exact total.
 
 /** Unpaid, unconfirmed orders one phone number may have open at once. */
 export const MAX_OPEN_ORDERS_PER_PHONE = 3;
@@ -54,6 +56,8 @@ export interface CreateContext {
 	/** Verifies a Turnstile token when Turnstile is configured. */
 	verifyHuman?: (token: string | undefined) => Promise<boolean>;
 	now?: Date;
+	/** Carrier API calls (tests pass a stub). */
+	fetch?: typeof fetch;
 }
 
 export async function createOrder(db: D1Database, s: Settings, raw: unknown, ctx: CreateContext): Promise<Order> {
@@ -82,9 +86,19 @@ export async function createOrder(db: D1Database, s: Settings, raw: unknown, ctx
 		if ((await countRecentOrdersForIp(db, ctx.ipHash, since)) >= MAX_ORDERS_PER_IP_PER_HOUR) throw new CheckoutError("too_many_orders");
 	}
 
-	const quoteFor = async () => buildQuote(input.items, await loadProducts(db, input.items.map((i) => i.productId)), s.shipping);
+	// Items and shipping are priced here, by the server; what the shopper saw only flags a change.
+	const quoteFor = async () => {
+		const items = buildQuote(input.items, await loadProducts(db, input.items.map((i) => i.productId)), s.shipping);
+		try {
+			return await priceShipping(items, s.shipping, input.address, ctx.fetch);
+		} catch (error) {
+			if (error instanceof ShippingAddressError) throw new CheckoutError("invalid", { fields: ["address.ward"] });
+			throw error;
+		}
+	};
 	const quote = await quoteFor();
 	if (quote.hasIssues || quote.itemCount === 0) throw new CheckoutError("quote_changed", { quote });
+	if (input.shippingFee !== undefined && input.shippingFee !== quote.shippingFee) throw new CheckoutError("quote_changed", { quote });
 
 	const at = now.toISOString();
 	const ttl = ttlMinutes(input.paymentMethod, s);
@@ -95,7 +109,8 @@ export async function createOrder(db: D1Database, s: Settings, raw: unknown, ctx
 		paymentMethod: input.paymentMethod,
 		paymentStatus: "unpaid",
 		customer: { name: input.customer.name, phone: phone!, ...(email ? { email } : {}) },
-		address: input.address,
+		// GHN's spelling of the ward when GHN priced the delivery, so the parcel can be booked as is.
+		address: { ...input.address, ...(quote.ward ? { ward: quote.ward } : {}) },
 		...(input.note ? { note: input.note } : {}),
 		lines: quote.lines.map((l) => ({
 			productId: l.productId,
@@ -242,9 +257,16 @@ const transitions: Record<Exclude<OrderAction, "mark_paid">, { from: OrderStatus
 };
 
 export function allowedActions(order: Order): OrderAction[] {
-	const actions = (Object.keys(transitions) as (keyof typeof transitions)[]).filter((a) => transitions[a].from.includes(order.status)) as OrderAction[];
-	// The seller confirms VietQR transfers by hand; COD becomes paid only when it is delivered.
+	// A parcel booked with GHN can't be cancelled here (it would restock goods GHN still carries)
+	// unless GHN reports it cancelled: cancel it in GHN's app first.
+	const parcelLive = Boolean(order.shipment) && order.shipment?.status !== "cancel";
+	const actions = (Object.keys(transitions) as (keyof typeof transitions)[])
+		.filter((a) => transitions[a].from.includes(order.status))
+		.filter((a) => !(a === "cancel" && parcelLive)) as OrderAction[];
+	// The seller confirms VietQR transfers by hand; COD becomes paid when it is delivered.
 	if (order.paymentMethod === "vietqr" && order.paymentStatus === "unpaid" && order.status !== "cancelled") actions.push("mark_paid");
+	// A delivered GHN parcel waits for GHN's COD transfer; the seller can confirm the money by hand.
+	if (order.paymentMethod === "cod" && order.paymentStatus === "unpaid" && order.status === "delivered") actions.push("mark_paid");
 	return actions;
 }
 
@@ -268,13 +290,14 @@ export async function applyOrderAction(db: D1Database, id: string, action: Order
 	}
 	if (action === "mark_paid") {
 		next.paymentStatus = "paid";
-		next.payment = { provider: "bank", ref: "manual", paidAt: at };
+		next.payment = { provider: order.paymentMethod === "cod" ? "cod" : "bank", ref: "manual", paidAt: at };
 		next.history.push({ status: "paid", at, note: "Shop xác nhận đã nhận tiền" });
 	} else {
 		next.status = transitions[action].to;
 		next.history.push({ status: next.status, at });
-		// Cash on delivery is collected when the parcel is delivered.
-		if (action === "deliver" && order.paymentMethod === "cod" && order.paymentStatus === "unpaid") {
+		// Cash on delivery is collected when the seller marks the parcel delivered, unless GHN
+		// carries it: then it is paid when GHN transfers the COD (applyCarrierEvent) or by hand.
+		if (action === "deliver" && order.paymentMethod === "cod" && order.paymentStatus === "unpaid" && !order.shipment) {
 			next.paymentStatus = "paid";
 			next.payment = { provider: "cod", ref: "delivery", paidAt: at };
 			next.history.push({ status: "paid", at, note: "COD" });
@@ -283,6 +306,128 @@ export async function applyOrderAction(db: D1Database, id: string, action: Order
 	const saved = await saveOrder(db, order, next);
 	log.info("order.updated", { orderId: id, action, status: saved.status, payment: saved.paymentStatus });
 	return saved;
+}
+
+// ------------------------------------------------------------------ GHN parcels
+
+/** A confirmed HCM order the shop can hand to GHN: COD, or VietQR already paid. */
+export function canBookGhn(order: Order, s: Settings): boolean {
+	return (
+		Boolean(s.shipping.ghn) &&
+		!order.shipment &&
+		order.status === "confirmed" &&
+		order.address.province === HCM_PROVINCE &&
+		(order.paymentMethod === "cod" || order.paymentStatus === "paid")
+	);
+}
+
+/**
+ * Seller action: books the parcel with GHN. COD orders have GHN collect the order total. Safe to
+ * retry: GHN returns the same parcel for the same order id, and a parcel already saved is kept.
+ */
+export async function bookGhnShipment(db: D1Database, s: Settings, id: string, expectedVersion?: number, f: typeof fetch = fetch): Promise<Order> {
+	const order = await getOrder(db, id);
+	if (!order) throw new Error("not_found");
+	if (expectedVersion !== undefined && order.version !== expectedVersion) throw new ConflictError("stale");
+	if (!canBookGhn(order, s) || !s.shipping.ghn) throw new ConflictError(`cannot book while ${order.status}`);
+	const area = await ghnWards(s.shipping.ghn, order.address.province, f);
+	const ward = matchWard(area.wards, order.address.ward);
+	if (!ward) throw new ShippingAddressError("unknown ward");
+	const code = await ghnCreateOrder(
+		s.shipping.ghn,
+		{
+			orderId: order.id,
+			name: order.customer.name,
+			phone: order.customer.phone,
+			street: order.address.street,
+			to: { province: area.province, ward },
+			codAmount: order.paymentMethod === "cod" && order.paymentStatus === "unpaid" ? order.total : 0,
+			parcel: parcelFor(s.shipping.parcel, order.lines.reduce((n, l) => n + l.quantity, 0)),
+			items: order.lines.map((l) => ({ name: `${l.title} – ${l.skuName}`, quantity: l.quantity, price: l.unitPrice })),
+			...(order.note ? { note: order.note } : {}),
+		},
+		f,
+	);
+	for (let attempt = 0; attempt < 3; attempt++) {
+		const current = await getOrder(db, id);
+		if (!current) throw new Error("not_found");
+		if (current.shipment) return current;
+		// Cancelled while GHN was booking: still record the parcel, so the seller sees it and cancels it at GHN.
+		if (current.status !== "confirmed") log.warn("order.shipment_booked_after_change", { orderId: id, status: current.status });
+		const at = new Date().toISOString();
+		try {
+			const saved = await saveOrder(db, current, { ...current, shipment: { carrier: "ghn", code, status: "ready_to_pick", bookedAt: at }, updatedAt: at });
+			log.info("order.shipment_booked", { orderId: id, carrier: "ghn" });
+			return saved;
+		} catch (error) {
+			if (!(error instanceof ConflictError)) throw error;
+		}
+	}
+	throw new ConflictError(`Order ${id} kept changing while booking`);
+}
+
+export interface CarrierEvent {
+	orderId: string;
+	/** The carrier's tracking code; must match the parcel booked for the order. */
+	code: string;
+	type: string;
+	status: string;
+	codAmount: number;
+	codTransferred: boolean;
+}
+
+/**
+ * Applies a GHN order callback. The parcel leaving the shop ships the order and delivery delivers
+ * it; a COD order becomes paid only when GHN reports transferring the COD, for exactly the order
+ * total. Returns, losses and cancellations are only recorded for the seller. Idempotent.
+ */
+export async function applyCarrierEvent(db: D1Database, event: CarrierEvent): Promise<"updated" | "ignored" | "not_found"> {
+	for (let attempt = 0; attempt < 3; attempt++) {
+		const order = await getOrder(db, event.orderId);
+		if (!order?.shipment || !safeEqual(order.shipment.code, event.code)) return "not_found";
+		if (order.status === "cancelled" && (event.type === "cod" || GHN_IN_TRANSIT.has(event.status) || event.status === "delivered")) {
+			log.warn("order.carrier_event_after_cancel", { orderId: order.id, type: event.type, carrierStatus: event.status, codAmount: event.codAmount });
+		}
+		const at = new Date().toISOString();
+		const next: Order = { ...order, history: [...order.history], updatedAt: at };
+		let changed = false;
+		const reached = (status: "shipped" | "delivered", note: string) => {
+			next.status = status;
+			next.history.push({ status, at, note });
+			changed = true;
+		};
+
+		if (event.type === "switch_status" && event.status && event.status !== order.shipment.status) {
+			next.shipment = { ...order.shipment, status: event.status, updatedAt: at };
+			changed = true;
+			const moving = GHN_IN_TRANSIT.has(event.status) || event.status === "delivered";
+			if (moving && (next.status === "pending" || next.status === "confirmed")) reached("shipped", "GHN đã lấy hàng");
+			if (event.status === "delivered" && next.status === "shipped") reached("delivered", "GHN giao thành công");
+		}
+		if (event.type === "cod" && event.codTransferred && order.paymentMethod === "cod" && order.paymentStatus === "unpaid" && order.status !== "cancelled") {
+			if (event.codAmount !== order.total) {
+				log.warn("payment.amount_mismatch", { orderId: order.id, expected: order.total, received: event.codAmount, provider: "cod" });
+			} else {
+				if (next.status === "pending" || next.status === "confirmed") reached("shipped", "GHN đã lấy hàng");
+				if (next.status === "shipped") reached("delivered", "GHN giao thành công");
+				next.paymentStatus = "paid";
+				next.payment = { provider: "cod", ref: `ghn:${order.shipment.code}`, paidAt: at };
+				next.history.push({ status: "paid", at, note: "GHN chuyển tiền COD" });
+				changed = true;
+			}
+		}
+		if (!changed) return "ignored";
+		// Only pending, unpaid orders expire.
+		if (next.status !== "pending" || next.paymentStatus === "paid") delete next.expiresAt;
+		try {
+			await saveOrder(db, order, next);
+			log.info("order.carrier_event", { orderId: order.id, type: event.type, carrierStatus: event.status, status: next.status, payment: next.paymentStatus });
+			return "updated";
+		} catch (error) {
+			if (!(error instanceof ConflictError)) throw error;
+		}
+	}
+	throw new ConflictError(`Order ${event.orderId} kept changing while applying a carrier event`);
 }
 
 /**

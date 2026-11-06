@@ -28,6 +28,25 @@ $$("[data-action]").forEach((btn) =>
 	}),
 );
 
+$$("[data-book-ghn]").forEach((btn) =>
+	btn.addEventListener("click", async () => {
+		if (!confirmed(btn)) return;
+		const wrap = btn.closest("[data-order]");
+		const err = document.querySelector("[data-form-error]");
+		btn.disabled = true;
+		const res = await post(`/api/admin/orders/${wrap.dataset.order}/ghn`, { version: Number(wrap.dataset.version) });
+		if (res.ok) return location.reload();
+		const reasons = {
+			conflict: "Đơn vừa thay đổi hoặc chưa đủ điều kiện (cần xác nhận; VietQR cần đã thanh toán). Tải lại trang.",
+			ward: "GHN không nhận ra phường / xã của đơn này. Tạo vận đơn trên app GHN.",
+			carrier: "GHN từ chối hoặc không phản hồi. Thử lại sau, hoặc tạo trên app GHN.",
+		};
+		err.textContent = reasons[res.data?.error] ?? "Không thực hiện được, thử lại.";
+		err.hidden = false;
+		btn.disabled = false;
+	}),
+);
+
 $$("[data-save-sku]").forEach((btn) =>
 	btn.addEventListener("click", async () => {
 		const row = btn.closest("[data-sku-id]");

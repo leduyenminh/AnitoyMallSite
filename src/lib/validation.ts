@@ -92,7 +92,16 @@ const cartItem = z.object({
 	price: z.number().int().nonnegative().optional(),
 });
 
-export const quoteSchema = z.object({ items: z.array(cartItem).max(30) });
+/** Where a quote ships to; shipping is priced once the province and ward are known. */
+const destination = z.object({
+	province: z.enum(provinces),
+	ward: z.string().trim().max(100),
+});
+
+export const quoteSchema = z.object({ items: z.array(cartItem).max(30), address: destination.optional() });
+
+/** The province of Ho Chi Minh City, where GHN delivers; elsewhere Viettel Post. */
+export const HCM_PROVINCE = "Thành phố Hồ Chí Minh" satisfies (typeof provinces)[number];
 
 export const checkoutSchema = z.object({
 	items: z.array(cartItem).min(1).max(30),
@@ -108,12 +117,25 @@ export const checkoutSchema = z.object({
 	}),
 	note: z.string().trim().max(500).optional(),
 	paymentMethod: z.enum(["cod", "vietqr"]),
+	/** Shipping fee the shopper saw; only used to flag a change, never charged. */
+	shippingFee: z.number().int().nonnegative().max(10_000_000).optional(),
 	/** Honeypot: a field humans never see. Bots that fill it are rejected. */
 	website: z.string().max(200).optional(),
 	turnstileToken: z.string().max(4096).optional(),
 });
 
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
+
+/** GHN order status callback (developer.ghn.vn → Order Status Callback); other fields are ignored. */
+export const ghnCallbackSchema = z.object({
+	ShopID: z.number().int(),
+	OrderCode: z.string().max(50),
+	ClientOrderCode: z.string().max(50).nullish(),
+	Type: z.string().max(50),
+	Status: z.string().max(50),
+	CODAmount: z.number().int().nonnegative().max(1_000_000_000),
+	CODTransferDate: z.string().max(50).nullish(),
+});
 
 export const lookupSchema = z.object({
 	code: z.string().trim().min(7).max(20),

@@ -77,7 +77,7 @@ export function HomePage({ ctx, products }: { ctx: ViewCtx; products: Product[] 
 			{bestsellers.length > 0 && (
 				<section class="section section--band">
 					<div class="container">
-						<SectionHeader title="Bán chạy trên TikTok Shop" sub="Theo số lượng đã bán trên TikTok Shop" href="/san-pham?sort=bestselling" />
+						<SectionHeader title="Bán chạy" href="/san-pham?sort=bestselling" />
 						<Rail label="Sản phẩm bán chạy">
 							{bestsellers.map((p, i) => (
 								<ProductCard s={s} product={p} eager={i < 2} />
@@ -88,13 +88,13 @@ export function HomePage({ ctx, products }: { ctx: ViewCtx; products: Product[] 
 			)}
 
 			<section class="section container">
-				<SectionHeader title="Gợi ý hôm nay" sub="Được xem nhiều nhất trên TikTok" href="/san-pham" />
+				<SectionHeader title="Gợi ý hôm nay" href="/san-pham" />
 				<ProductGrid s={s} products={featured.sort((a, b) => productViews(b) - productViews(a)).slice(0, 12)} />
 			</section>
 
 			<section class="section section--band">
 				<div class="container">
-					<SectionHeader title="Đang hot trên TikTok" sub="Mở hộp và decor thật từ @leduyenminh · phát bằng trình phát chính thức của TikTok" href="/video" />
+					<SectionHeader title="Đang hot trên TikTok" href="/video" />
 					<Rail label="Video TikTok">
 						{topVideos.map((v) => (
 							<VideoCard video={v} product={productForVideo.get(v.id)} compact />
@@ -107,7 +107,7 @@ export function HomePage({ ctx, products }: { ctx: ViewCtx; products: Product[] 
 				<div class="trust__item window">
 					<Icon name="shield" size={28} />
 					<h3>Mua trực tiếp, an toàn</h3>
-					<p class="muted">Đặt hàng không cần tài khoản. Thanh toán khi nhận hàng (COD) hoặc chuyển khoản VietQR thẳng vào tài khoản BIDV của shop.</p>
+					<p class="muted">Đặt hàng không cần tài khoản. Thanh toán khi nhận hàng (COD) hoặc chuyển khoản VietQR.</p>
 				</div>
 				<div class="trust__item window">
 					<Icon name="box" size={28} />

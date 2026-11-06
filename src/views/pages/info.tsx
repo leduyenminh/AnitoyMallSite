@@ -5,6 +5,12 @@ import type { Product } from "../../lib/types";
 import type { ViewCtx } from "../layout";
 import { Breadcrumbs, EmptyState, VideoCard } from "../ui";
 
+/** How shipping is charged, as one sentence without the free-shipping part. */
+const shippingRule = (s: Settings) =>
+	s.shipping.ghn
+		? `Giao trong TP.HCM: phí theo bảng giá GHN, hiện khi bạn chọn phường / xã. Tỉnh khác: ${formatVnd(s.shipping.fee)}`
+		: `Phí ship đồng giá ${formatVnd(s.shipping.fee)}`;
+
 export function faq(s: Settings): { q: string; a: string }[] {
 	const methods = enabledPaymentMethods(s)
 		.map((m) => paymentLabels[m].title)
@@ -13,7 +19,7 @@ export function faq(s: Settings): { q: string; a: string }[] {
 		{ q: "Shop giao hàng trong bao lâu?", a: `Đơn được giao trong khoảng ${s.shipping.eta} ngày làm việc trên toàn quốc, tuỳ khu vực.` },
 		{
 			q: "Phí vận chuyển là bao nhiêu?",
-			a: `Phí ship đồng giá ${formatVnd(s.shipping.fee)}. Đơn từ ${formatVnd(s.shipping.freeThreshold)} được miễn phí vận chuyển.`,
+			a: `${shippingRule(s)}. Đơn từ ${formatVnd(s.shipping.freeThreshold)} được miễn phí vận chuyển.`,
 		},
 		{ q: "Có những cách thanh toán nào?", a: `${methods}. Bạn không cần tạo tài khoản để đặt hàng.` },
 		{
@@ -69,7 +75,7 @@ export function PolicyPage({ ctx }: { ctx: ViewCtx }) {
 			<section id="giao-hang" class="window card-pad">
 				<h2>Giao hàng</h2>
 				<p>
-					Giao toàn quốc trong {s.shipping.eta} ngày. Phí ship {formatVnd(s.shipping.fee)}, miễn phí cho đơn từ {formatVnd(s.shipping.freeThreshold)}. Địa chỉ dùng
+					Giao toàn quốc trong {s.shipping.eta} ngày. {shippingRule(s)}, miễn phí cho đơn từ {formatVnd(s.shipping.freeThreshold)}. Địa chỉ dùng
 					34 tỉnh, thành phố theo đơn vị hành chính mới từ 1/7/2025.
 				</p>
 			</section>
@@ -126,7 +132,7 @@ export function VideosPage({ ctx: _ctx, products }: { ctx: ViewCtx; products: Pr
 			<Breadcrumbs items={[{ name: "Trang chủ", href: "/" }, { name: "Video TikTok" }]} />
 			<header class="page-head">
 				<h1>Video TikTok</h1>
-				<p class="muted">{list.length} video mở hộp và decor từ @leduyenminh, phát bằng trình phát chính thức của TikTok.</p>
+				<p class="muted">{list.length} video mở hộp và decor từ @leduyenminh.</p>
 			</header>
 			<div class="video-grid">
 				{list.map((v) => (

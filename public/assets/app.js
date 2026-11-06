@@ -176,15 +176,24 @@ function renderBadges() {
 	});
 }
 
+/** On checkout, the address the shipping fee depends on (GHN prices HCM by ward). */
+function quoteAddress() {
+	const form = $("[data-checkout-form]");
+	const province = String(form?.elements.province?.value ?? "").trim();
+	if (!province) return undefined;
+	return { province, ward: String(form.elements.ward?.value ?? "").trim().slice(0, 100) };
+}
+
 let quoteSeq = 0;
 let lastQuote = null;
 async function refreshQuote() {
 	const items = cart.items();
 	const seq = ++quoteSeq;
 	if (!items.length) {
-		lastQuote = { lines: [], itemCount: 0, subtotal: 0, shippingFee: 0, total: 0, freeShippingRemaining: freeThreshold, hasIssues: false };
+		lastQuote = { lines: [], itemCount: 0, subtotal: 0, shippingFee: 0, total: 0, freeShippingRemaining: freeThreshold, hasIssues: false, shippingPending: false };
 	} else {
-		const res = await api("/api/cart/quote", { items });
+		const address = quoteAddress();
+		const res = await api("/api/cart/quote", { items, ...(address ? { address } : {}) });
 		if (seq !== quoteSeq) return lastQuote;
 		if (!res.ok) {
 			if (res.status === 429) toast("Bạn thao tác nhanh quá, thử lại sau ít giây nhé.");
@@ -224,7 +233,17 @@ function renderQuote(q) {
 		el.innerHTML = q.lines.length ? q.lines.map((l) => lineHtml(l, false)).join("") : empty;
 	});
 	$$("[data-cart-subtotal], [data-sum-subtotal]").forEach((el) => (el.textContent = money(q.subtotal)));
-	$$("[data-sum-shipping]").forEach((el) => (el.textContent = q.itemCount ? (q.shippingFee ? money(q.shippingFee) : "Miễn phí") : "–"));
+	const shippingText = !q.itemCount
+		? "–"
+		: q.shippingPending
+			? $("[data-checkout-form]")
+				? "Nhập địa chỉ để tính"
+				: "Tính khi thanh toán"
+			: q.shippingFee
+				? money(q.shippingFee)
+				: "Miễn phí";
+	$$("[data-sum-shipping]").forEach((el) => (el.textContent = shippingText));
+	$$("[data-ward-hint]").forEach((el) => (el.hidden = q.addressIssue !== "ward"));
 	$$("[data-sum-total]").forEach((el) => (el.textContent = money(q.total)));
 	$$("[data-ship-meter]").forEach((el) => {
 		el.hidden = !q.itemCount;
@@ -241,7 +260,7 @@ function renderQuote(q) {
 	const submit = $("[data-submit]");
 	if (submit) {
 		submit.disabled = !q.itemCount;
-		submit.textContent = q.itemCount ? `Đặt hàng · ${money(q.total)}` : "Đặt hàng";
+		submit.textContent = q.itemCount && !q.shippingPending ? `Đặt hàng · ${money(q.total)}` : "Đặt hàng";
 	}
 }
 
@@ -451,7 +470,8 @@ function initTikTok() {
 
 const errorText = {
 	invalid: "Vui lòng kiểm tra lại các thông tin được đánh dấu.",
-	quote_changed: "Giỏ hàng vừa thay đổi (hết hàng hoặc đổi giá). Đã cập nhật lại, vui lòng kiểm tra rồi đặt lại.",
+	quote_changed: "Giỏ hàng hoặc phí giao hàng vừa thay đổi. Đã cập nhật lại, vui lòng kiểm tra rồi đặt lại.",
+	shipping_pending: "Vui lòng chọn phường / xã trong danh sách để tính phí giao hàng.",
 	too_many_orders: "Số điện thoại hoặc mạng của bạn đang có quá nhiều đơn chưa hoàn tất. Vui lòng hoàn tất đơn trước hoặc thử lại sau.",
 	verification_failed: "Xác minh chống spam chưa thành công, vui lòng thử lại.",
 	rate_limited: "Bạn thao tác quá nhanh. Vui lòng đợi một phút rồi thử lại.",
@@ -478,11 +498,40 @@ function initCheckout() {
 		const el = form.elements[k];
 		if (el && !el.value && typeof v === "string") el.value = v;
 	}
+	// Inside HCM the ward picks GHN's price: offer GHN's ward names and re-price as the address changes.
+	const wardList = $("[data-ward-list]", form);
+	const syncWardList = () => {
+		if (!wardList) return;
+		if (form.elements.province.value === wardList.dataset.wardList) form.elements.ward.setAttribute("list", wardList.id);
+		else form.elements.ward.removeAttribute("list");
+	};
+	let wardTimer;
+	form.addEventListener("change", (e) => {
+		if (e.target.name === "province") syncWardList();
+		if (e.target.name === "province" || e.target.name === "ward") refreshQuote();
+	});
+	form.addEventListener("input", (e) => {
+		if (e.target.name !== "ward") return;
+		clearTimeout(wardTimer);
+		wardTimer = setTimeout(refreshQuote, 500);
+	});
+	syncWardList();
+	if (quoteAddress()) refreshQuote();
+
 	form.addEventListener("submit", async (e) => {
 		e.preventDefault();
 		err.hidden = true;
 		$$("[aria-invalid]", form).forEach((el) => el.removeAttribute("aria-invalid"));
 		if (!form.reportValidity()) return;
+		// Order only at the total the shopper is looking at: re-price, and stop if anything moved.
+		const shown = lastQuote;
+		const q = await refreshQuote();
+		if (!q || q.shippingPending || !shown || shown.total !== q.total) {
+			err.textContent = q?.shippingPending ? errorText.shipping_pending : errorText.quote_changed;
+			err.hidden = false;
+			if (q?.addressIssue === "ward") form.elements.ward.setAttribute("aria-invalid", "true");
+			return;
+		}
 		const f = new FormData(form);
 		const get = (k) => String(f.get(k) ?? "").trim();
 		const payload = {
@@ -491,6 +540,7 @@ function initCheckout() {
 			address: { province: get("province"), ward: get("ward"), street: get("street") },
 			...(get("note") ? { note: get("note") } : {}),
 			paymentMethod: get("paymentMethod"),
+			shippingFee: q.shippingFee,
 			website: get("website"),
 			...(f.get("cf-turnstile-response") ? { turnstileToken: String(f.get("cf-turnstile-response")) } : {}),
 		};

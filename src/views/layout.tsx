@@ -205,7 +205,7 @@ function Footer({ ctx }: { ctx: ViewCtx }) {
 							<strong>Anitoy</strong>
 						</span>
 					</a>
-					<p class="muted">Shop mô hình anime chibi của @{site.tiktok.handle}. Mỗi sản phẩm đều có video thật trên TikTok.</p>
+					<p class="muted">Shop mô hình anime chibi của @{site.tiktok.handle}.</p>
 					{(s.contact.phone || s.contact.email || s.contact.zalo) && (
 						<ul class="plain">
 							{s.contact.phone && (
@@ -275,7 +275,6 @@ function Footer({ ctx }: { ctx: ViewCtx }) {
 							<li class={`pay-badge pay-badge--${m}`}>{paymentLabels[m].title.replace(/ \(.*\)/, "")}</li>
 						))}
 					</ul>
-					<p class="muted small">Đơn hàng thanh toán trực tiếp cho shop. Tiền chuyển khoản về tài khoản BIDV của shop.</p>
 				</section>
 			</div>
 			<div class="container site-footer__bottom">

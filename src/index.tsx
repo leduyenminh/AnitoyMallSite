@@ -9,6 +9,7 @@ import {
 	ensureDb,
 	getOrder,
 	importCatalog,
+	type ImportMode,
 	listOrders,
 	loadCatalog,
 	loadProducts,
@@ -18,9 +19,21 @@ import {
 } from "./lib/db";
 import { allow, clientIp, ipHash, verifyTurnstile } from "./lib/limits";
 import { log } from "./lib/log";
-import { applyOrderAction, CheckoutError, createOrder, expireOrders, getOrderForViewer, lookupOrder, type OrderAction } from "./lib/orders";
+import {
+	applyCarrierEvent,
+	applyOrderAction,
+	bookGhnShipment,
+	canBookGhn,
+	CheckoutError,
+	createOrder,
+	expireOrders,
+	getOrderForViewer,
+	lookupOrder,
+	type OrderAction,
+} from "./lib/orders";
 import { handleBankTransaction, sepayAuthorized } from "./lib/payments";
 import { buildQuote } from "./lib/quote";
+import { ghnWards, priceShipping, ShippingAddressError } from "./lib/shipping";
 import {
 	breadcrumbJsonLd,
 	categoryPath,
@@ -34,7 +47,7 @@ import {
 	sitemapXml,
 	storeJsonLd,
 } from "./lib/seo";
-import { normalisePhone, normaliseOrderCode, lookupSchema, quoteSchema } from "./lib/validation";
+import { ghnCallbackSchema, HCM_PROVINCE, isOrderCode, normalisePhone, normaliseOrderCode, lookupSchema, quoteSchema } from "./lib/validation";
 import { Document, THEME_BOOT, type PageMeta, type ViewCtx } from "./views/layout";
 import { AdminDocument, AdminOrder, AdminOrders, AdminProducts } from "./views/pages/admin";
 import { CartPage, CheckoutPage } from "./views/pages/checkout";
@@ -76,7 +89,7 @@ app.use("*", async (c, next) => {
 		return c.redirect(`${url.origin}${url.pathname.replace(/\/+$/, "") || "/"}${url.search}`, 301);
 	}
 	c.set("s", settings(c.env, url.origin));
-	await ensureDb(c.env.DB);
+	await ensureDb(c.env.DB, c.get("s").pricing);
 	await next();
 	const h = c.res.headers;
 	h.set("X-Content-Type-Options", "nosniff");
@@ -300,7 +313,17 @@ app.get("/tra-cuu-don-hang", edgeCache, (c) =>
 );
 
 app.get("/gio-hang", (c) => page(c, { title: titled("Giỏ hàng"), noindex: true }, <CartPage ctx={viewCtx(c)} />));
-app.get("/thanh-toan", (c) => page(c, { title: titled("Thanh toán"), noindex: true }, <CheckoutPage ctx={viewCtx(c)} />));
+app.get("/thanh-toan", async (c) => {
+	// Inside HCM GHN prices by ward, so checkout offers GHN's ward names (cached a day per isolate).
+	const ghn = c.get("s").shipping.ghn;
+	const hcmWards = ghn
+		? await ghnWards(ghn, HCM_PROVINCE).then(
+				(area) => area.wards.map((w) => w.name).sort((a, b) => a.localeCompare(b, "vi")),
+				() => null,
+			)
+		: null;
+	return page(c, { title: titled("Thanh toán"), noindex: true }, <CheckoutPage ctx={viewCtx(c)} hcmWards={hcmWards} />);
+});
 
 app.get("/don-hang/:id", async (c) => {
 	const order = await getOrderForViewer(c.env.DB, c.req.param("id"), c.req.query("t"));
@@ -370,9 +393,16 @@ app.post("/api/cart/quote", async (c) => {
 	if (!(await allow(c.env.API_LIMITER, `quote:${clientIp(c.req.raw)}`))) return tooMany(c);
 	const parsed = quoteSchema.safeParse(await c.req.json().catch(() => null));
 	if (!parsed.success) return c.json({ error: "invalid" }, 400, noStore);
-	const items = parsed.data.items;
-	const products = await loadProducts(c.env.DB, items.map((i) => i.productId));
-	return c.json(buildQuote(items, products, c.get("s").shipping), 200, noStore);
+	const { items, address } = parsed.data;
+	const shipping = c.get("s").shipping;
+	const quote = buildQuote(items, await loadProducts(c.env.DB, items.map((i) => i.productId)), shipping);
+	try {
+		return c.json(await priceShipping(quote, shipping, address), 200, noStore);
+	} catch (error) {
+		// A ward GHN doesn't deliver to: no fee until the shopper picks one from the list.
+		if (error instanceof ShippingAddressError) return c.json({ ...quote, shippingFee: 0, total: quote.subtotal, shippingPending: true, addressIssue: "ward" }, 200, noStore);
+		throw error;
+	}
 });
 
 app.post("/api/orders", async (c) => {
@@ -420,6 +450,36 @@ app.post("/api/webhooks/sepay", async (c) => {
 	const body = await c.req.json().catch(() => null);
 	if (!body || typeof body !== "object") return c.json({ success: false }, 400);
 	await handleBankTransaction(c.env.DB, s, body);
+	return c.json({ success: true });
+});
+
+/**
+ * GHN order callbacks for parcels booked from /admin. Registered at developer.ghn.vn with the
+ * custom header X-Webhook-Token = GHN_WEBHOOK_SECRET; refused without it or for another shop.
+ * A 4xx is final for GHN, so only a lost update race answers 503 (GHN retries).
+ */
+app.post("/api/webhooks/ghn", async (c) => {
+	const ghn = c.get("s").shipping.ghn;
+	if (!ghn?.webhookSecret || !safeEqual(c.req.header("X-Webhook-Token") ?? "", ghn.webhookSecret)) return c.json({ success: false }, 401);
+	const parsed = ghnCallbackSchema.safeParse(await c.req.json().catch(() => null));
+	if (!parsed.success || parsed.data.ShopID !== ghn.shopId) return c.json({ success: false }, 400);
+	const e = parsed.data;
+	const orderId = normaliseOrderCode(e.ClientOrderCode ?? "");
+	if (!isOrderCode(orderId)) return c.json({ success: true });
+	try {
+		const result = await applyCarrierEvent(c.env.DB, {
+			orderId,
+			code: e.OrderCode,
+			type: e.Type,
+			status: e.Status,
+			codAmount: e.CODAmount,
+			codTransferred: Boolean(e.CODTransferDate),
+		});
+		if (result === "not_found") log.warn("ghn.callback_unmatched", { orderId, type: e.Type });
+	} catch (error) {
+		if (error instanceof ConflictError) return c.json({ success: false }, 503);
+		throw error;
+	}
 	return c.json({ success: true });
 });
 
@@ -478,7 +538,7 @@ app.get("/admin", async (c) => {
 app.get("/admin/don-hang/:id", async (c) => {
 	const order = await getOrder(c.env.DB, c.req.param("id"));
 	if (!order) return c.notFound();
-	return adminPage(c, `Đơn ${order.id}`, <AdminOrder order={order} />);
+	return adminPage(c, `Đơn ${order.id}`, <AdminOrder order={order} canBookGhn={canBookGhn(order, c.get("s"))} />);
 });
 
 app.get("/admin/san-pham", async (c) => {
@@ -497,6 +557,22 @@ app.post("/api/admin/orders/:id", async (c) => {
 		if (error instanceof ConflictError) return c.json({ error: "conflict" }, 409);
 		if (error instanceof Error && error.message === "not_found") return c.json({ error: "not_found" }, 404);
 		throw error;
+	}
+});
+
+/** Books an HCM order's parcel with GHN (sends the customer's name, phone and address to GHN). */
+app.post("/api/admin/orders/:id/ghn", async (c) => {
+	const body = (await c.req.json().catch(() => ({}))) as { version?: unknown };
+	const version = typeof body.version === "number" && Number.isInteger(body.version) ? body.version : undefined;
+	try {
+		const order = await bookGhnShipment(c.env.DB, c.get("s"), c.req.param("id"), version);
+		return c.json({ ok: true, version: order.version });
+	} catch (error) {
+		if (error instanceof ConflictError) return c.json({ error: "conflict" }, 409);
+		if (error instanceof ShippingAddressError) return c.json({ error: "ward" }, 400);
+		if (error instanceof Error && error.message === "not_found") return c.json({ error: "not_found" }, 404);
+		log.warn("ghn.booking_failed", { orderId: c.req.param("id"), reason: error instanceof Error ? error.message : "unknown" });
+		return c.json({ error: "carrier" }, 502);
 	}
 });
 
@@ -522,8 +598,9 @@ app.post("/api/admin/products/:id", async (c) => {
 
 app.post("/api/admin/import", async (c) => {
 	const b = (await c.req.json().catch(() => ({}))) as { mode?: string };
-	await importCatalog(c.env.DB, { commerce: b.mode === "commerce" });
-	log.info("catalog.imported", { mode: b.mode ?? "content" });
+	const mode: ImportMode = b.mode === "commerce" || b.mode === "prices" ? b.mode : "content";
+	await importCatalog(c.env.DB, { mode, pricing: c.get("s").pricing });
+	log.info("catalog.imported", { mode });
 	return c.json({ ok: true });
 });
 
@@ -547,7 +624,7 @@ export default {
 	async scheduled(_controller, env, ctx) {
 		ctx.waitUntil(
 			(async () => {
-				await ensureDb(env.DB);
+				await ensureDb(env.DB, settings(env).pricing);
 				await expireOrders(env.DB);
 			})(),
 		);

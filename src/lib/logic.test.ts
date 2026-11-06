@@ -4,6 +4,7 @@ import { enabledPaymentMethods, settings, wwwRedirect } from "./config";
 import { randomCode, safeEqual } from "./crypto";
 import { percentOff } from "./money";
 import { crc16, safeMemo, vietQrPayload } from "./payments/vietqr";
+import { NO_FEES, pricingRule, sitePrice } from "./pricing";
 import { buildQuote, shippingFor } from "./quote";
 import { escapeXml, googleFeed, productJsonLd } from "./seo";
 import type { Product } from "./types";
@@ -33,6 +34,34 @@ function product(overrides: Partial<Product> = {}): Product {
 		...overrides,
 	};
 }
+
+describe("pricing", () => {
+	const settlement = { feeBps: 2751, fixedFee: 3000, rounding: 1 };
+
+	it("takes TikTok's fees off the list price, matching a real settlement", () => {
+		// 72,000đ − 6% − 13% − 5% − 2,528đ affiliate − 3,000đ processing = 49,192đ on TikTok.
+		expect(sitePrice(72000, settlement)).toBe(49192);
+		expect(sitePrice(72000, { ...settlement, rounding: 1000 })).toBe(49000);
+		expect(sitePrice(86192, { ...settlement, rounding: 1000 })).toBe(59000);
+	});
+
+	it("never prices an item TikTok has no price for, and stays a whole positive number", () => {
+		expect(sitePrice(0, settlement)).toBe(0);
+		expect(sitePrice(3000, settlement)).toBe(0);
+		expect(sitePrice(4500, { ...settlement, rounding: 1000 })).toBe(1000);
+		expect(Number.isInteger(sitePrice(99999, settlement))).toBe(true);
+	});
+
+	it("reads the settings and ignores values out of range", () => {
+		expect(settings({ TIKTOK_FEE_BPS: "2751", TIKTOK_FIXED_FEE: "3000", PRICE_ROUNDING: "1000" } as unknown as Env).pricing).toEqual({
+			feeBps: 2751,
+			fixedFee: 3000,
+			rounding: 1000,
+		});
+		expect(pricingRule("27.51", "-1", "0")).toEqual(NO_FEES);
+		expect(s.pricing).toEqual(NO_FEES);
+	});
+});
 
 describe("buildQuote", () => {
 	it("prices from the catalog, not the client, and adds shipping under the threshold", () => {

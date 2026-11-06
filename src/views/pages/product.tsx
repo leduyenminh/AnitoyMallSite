@@ -182,7 +182,7 @@ export function ProductPage({ ctx, product, related, selectedSkuId }: { ctx: Vie
 
 			{vids.length > 0 && (
 				<section class="section" id="videos">
-					<SectionHeader title="Video trên TikTok" sub={`${vids.length} video từ @leduyenminh · phát bằng trình phát chính thức của TikTok`} />
+					<SectionHeader title="Video trên TikTok" sub={`${vids.length} video từ @leduyenminh`} />
 					<Rail label="Video sản phẩm">
 						{vids.map((v) => (
 							<VideoCard video={v} compact />

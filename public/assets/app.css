@@ -653,7 +653,7 @@ textarea {
 	padding: 0;
 	margin: 18px 0 0;
 	display: grid;
-	grid-template-columns: repeat(4, 1fr);
+	grid-template-columns: repeat(3, 1fr);
 	gap: 12px;
 }
 .perks li {
@@ -1416,43 +1416,77 @@ textarea {
 }
 .pay-methods {
 	display: grid;
-	gap: 8px;
 	margin-bottom: 10px;
+	border: 1.5px solid var(--border);
+	border-radius: var(--radius-sm);
+	overflow: hidden;
 }
-.pay-method {
+.pay-method + .pay-method {
+	border-top: 1.5px solid var(--border);
+}
+.pay-method__option {
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	padding: 12px;
-	border: 1.5px solid var(--border);
-	border-radius: var(--radius-sm);
+	padding: 14px 12px;
+	font-size: 0.95rem;
 	cursor: pointer;
 }
-.pay-method:has(input:checked) {
-	border-color: var(--brand);
-	background: var(--brand-soft);
+.pay-method:has(input:checked) .pay-method__option {
+	font-weight: 700;
 }
-.pay-method input {
+.pay-method__option input {
 	accent-color: var(--brand);
 	width: 18px;
 	height: 18px;
+	margin: 0;
+	flex: none;
 }
-.pay-method strong {
-	display: block;
-	font-size: 0.92rem;
+/* The shop's bank account, visible only while its method is selected. */
+.pay-account {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 12px;
+	margin: 0 12px 12px;
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: var(--surface-2);
 }
-.pay-method small {
-	display: block;
+.pay-method:not(:has(input:checked)) .pay-account {
+	display: none;
 }
-.pay-method__logo {
+.pay-account__text {
 	display: grid;
-	place-items: center;
-	flex: 0 0 52px;
-	height: 34px;
-	border-radius: 8px;
-	font-size: 0.72rem;
+	gap: 2px;
+	flex: 1;
+	min-width: 0;
+}
+.pay-account__no {
+	font-size: 1.05rem;
+	letter-spacing: 0.03em;
+	overflow-wrap: anywhere;
+}
+.pay-account__name {
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--muted);
+	text-transform: uppercase;
+}
+.pay-account__bank {
+	flex: none;
+	padding: 4px 10px;
+	border-radius: 6px;
+	font-size: 0.9rem;
 	font-weight: 800;
+	letter-spacing: 0.04em;
 	color: #fff;
+	background: #006b68;
+}
+.pay-account__note {
+	flex-basis: 100%;
+	font-size: 0.8rem;
 }
 .pay-badges {
 	list-style: none;
@@ -1977,6 +2011,9 @@ dd.totals__grand {
 	}
 	.perks {
 		grid-template-columns: repeat(2, 1fr);
+	}
+	.perks li:last-child:nth-child(odd) {
+		grid-column: 1 / -1;
 	}
 	.trust {
 		grid-template-columns: 1fr;

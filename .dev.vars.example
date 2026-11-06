@@ -6,3 +6,8 @@ ADMIN_PASSWORD=
 SEPAY_API_KEY=
 # Optional: Cloudflare Turnstile secret (bot check at checkout)
 TURNSTILE_SECRET_KEY=
+# Optional: GHN API token (prices delivery inside Ho Chi Minh City; also set GHN_SHOP_ID and
+# SHIP_FROM_PHONE in cloudflare.config.ts)
+GHN_TOKEN=
+# Optional: random value for the X-Webhook-Token header of GHN order callbacks (/api/webhooks/ghn)
+GHN_WEBHOOK_SECRET=

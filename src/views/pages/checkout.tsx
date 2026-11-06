@@ -1,6 +1,6 @@
 import { enabledPaymentMethods, paymentLabels } from "../../lib/config";
 import { formatVnd } from "../../lib/money";
-import { provinces } from "../../lib/validation";
+import { HCM_PROVINCE, provinces } from "../../lib/validation";
 import { Icon } from "../icons";
 import type { ViewCtx } from "../layout";
 import { Breadcrumbs } from "../ui";
@@ -25,7 +25,7 @@ export function CartPage({ ctx }: { ctx: ViewCtx }) {
 	);
 }
 
-export function CheckoutPage({ ctx }: { ctx: ViewCtx }) {
+export function CheckoutPage({ ctx, hcmWards }: { ctx: ViewCtx; hcmWards: string[] | null }) {
 	const { s } = ctx;
 	const methods = enabledPaymentMethods(s);
 	return (
@@ -70,6 +70,19 @@ export function CheckoutPage({ ctx }: { ctx: ViewCtx }) {
 							<label class="field">
 								<span>Phường / Xã *</span>
 								<input name="ward" required minlength={2} maxlength={100} autocomplete="address-level2" />
+								{hcmWards && (
+									<>
+										{/* GHN prices HCM deliveries by ward: offer GHN's ward names (app.js links the list for HCM). */}
+										<datalist id="hcm-wards" data-ward-list={HCM_PROVINCE}>
+											{hcmWards.map((w) => (
+												<option value={w}></option>
+											))}
+										</datalist>
+										<small class="muted" data-ward-hint hidden>
+											Chọn phường / xã trong danh sách để tính phí giao hàng.
+										</small>
+									</>
+								)}
 							</label>
 							<label class="field">
 								<span>Số nhà, tên đường *</span>
@@ -90,23 +103,30 @@ export function CheckoutPage({ ctx }: { ctx: ViewCtx }) {
 						<h2>
 							<Icon name="cash" size={18} /> Phương thức thanh toán
 						</h2>
-						<div class="pay-methods" role="radiogroup">
+						<div class="pay-methods" role="radiogroup" aria-label="Phương thức thanh toán">
 							{methods.map((m, i) => (
-								<label class="pay-method">
-									<input type="radio" name="paymentMethod" value={m} checked={i === 0} />
-									<span class={`pay-method__logo pay-badge--${m}`} aria-hidden="true">
-										{m === "cod" ? "COD" : "QR"}
-									</span>
-									<span>
-										<strong>{paymentLabels[m].title}</strong>
-										<small class="muted">{paymentLabels[m].hint}</small>
-									</span>
-								</label>
+								<div class="pay-method">
+									<label class="pay-method__option">
+										<input type="radio" name="paymentMethod" value={m} checked={i === 0} />
+										<span>{paymentLabels[m].title}</span>
+									</label>
+									{/* The shop's account, shown while VietQR is selected (CSS); the QR with amount and memo comes after ordering. */}
+									{m === "vietqr" && s.bank && (
+										<div class="pay-account">
+											<span class="pay-account__text">
+												<strong class="pay-account__no mono">{s.bank.accountNo}</strong>
+												<span class="pay-account__name">{s.bank.accountName}</span>
+											</span>
+											<span class="pay-account__bank">{s.bank.name}</span>
+											<small class="pay-account__note muted">Chuyển khoản sau khi đặt hàng, theo mã QR và nội dung trên trang đơn hàng.</small>
+										</div>
+									)}
+								</div>
 							))}
 						</div>
 						<p class="small muted">
 							Đơn chưa được thanh toán hoặc xác nhận sẽ tự huỷ sau {s.bank ? `${Math.round(s.ttl.bank / 60)} giờ (VietQR) và ` : ""}
-							{Math.round(s.ttl.cod / 60)} giờ (COD) để nhả hàng cho khách khác.
+							{Math.round(s.ttl.cod / 60)} giờ (COD).
 						</p>
 					</section>
 					{s.turnstile && <div class="cf-turnstile" data-sitekey={s.turnstile.siteKey} data-turnstile></div>}
@@ -159,7 +179,10 @@ function OrderSummary({ ctx, cta, submit }: { ctx: ViewCtx; cta?: { href: string
 				</>
 			)}
 			<p class="small muted">
-				Phí ship {formatVnd(ctx.s.shipping.fee)}, miễn phí cho đơn từ {formatVnd(ctx.s.shipping.freeThreshold)}.
+				{ctx.s.shipping.ghn
+					? `Phí ship TP.HCM theo bảng giá GHN, tỉnh khác ${formatVnd(ctx.s.shipping.fee)}`
+					: `Phí ship ${formatVnd(ctx.s.shipping.fee)}`}
+				, miễn phí cho đơn từ {formatVnd(ctx.s.shipping.freeThreshold)}.
 			</p>
 		</aside>
 	);
