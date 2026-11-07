@@ -1,10 +1,12 @@
 import type { Child } from "hono/jsx";
 import { collectionName, isSoldOut, leadSku, priceRange, productViews, tiktokVideoUrl, unitsSold } from "../lib/catalog";
 import type { Settings } from "../lib/config";
+import type { Lang } from "../lib/i18n";
 import { formatCount, formatVnd, percentOff } from "../lib/money";
 import { imageSrc, productPath } from "../lib/seo";
 import type { Product, Video } from "../lib/types";
 import { Icon } from "./icons";
+import { text } from "./text";
 
 export function Breadcrumbs({ items }: { items: { name: string; href?: string }[] }) {
 	return (
@@ -20,7 +22,7 @@ export function Breadcrumbs({ items }: { items: { name: string; href?: string }[
 	);
 }
 
-export function SectionHeader({ title, sub, href, linkLabel = "Xem tất cả" }: { title: string; sub?: string; href?: string; linkLabel?: string }) {
+export function SectionHeader({ title, sub, href, linkLabel }: { title: string; sub?: string; href?: string; linkLabel?: string }) {
 	return (
 		<div class="section-head">
 			<div>
@@ -29,14 +31,14 @@ export function SectionHeader({ title, sub, href, linkLabel = "Xem tất cả" }
 			</div>
 			{href && (
 				<a class="link-more" href={href}>
-					{linkLabel} <Icon name="chevron" size={16} />
+					{linkLabel ?? text.vi.viewAll} <Icon name="chevron" size={16} />
 				</a>
 			)}
 		</div>
 	);
 }
 
-export function Price({ product, showTag = true }: { product: Product; showTag?: boolean }) {
+export function Price({ product, lang, showTag = true }: { product: Product; lang: Lang; showTag?: boolean }) {
 	const sku = leadSku(product);
 	if (!sku) return null;
 	const range = priceRange(product);
@@ -44,10 +46,10 @@ export function Price({ product, showTag = true }: { product: Product; showTag?:
 	return (
 		<div class="price-row">
 			<span class="price">
-				{range.max > range.min && <small>từ </small>}
-				{formatVnd(sku.price)}
+				{range.max > range.min && <small>{text[lang].from}</small>}
+				{formatVnd(sku.price, lang)}
 			</span>
-			{sku.compareAtPrice && <s class="price-was">{formatVnd(sku.compareAtPrice)}</s>}
+			{sku.compareAtPrice && <s class="price-was">{formatVnd(sku.compareAtPrice, lang)}</s>}
 			{showTag && off && <span class="tag tag--sale">-{off}%</span>}
 		</div>
 	);
@@ -57,38 +59,42 @@ export function Price({ product, showTag = true }: { product: Product; showTag?:
  * The TikTok Shop rating, attributed (not presented as this site's reviews), and units sold on
  * TikTok Shop and this website together.
  */
-export function TikTokStats({ product, long = false }: { product: Product; long?: boolean }) {
+export function TikTokStats({ product, lang, long = false }: { product: Product; lang: Lang; long?: boolean }) {
+	const t = text[lang];
 	const r = product.tiktokRating;
 	const sold = unitsSold(product);
 	if (!r && !sold) return null;
 	return (
 		<p class="tt-stats">
 			{r && (
-				<span class="tt-stats__rating" title="Đánh giá trên TikTok Shop">
+				<span class="tt-stats__rating" title={t.ttRatingTitle}>
 					<Icon name="star" size={14} /> {r.value.toFixed(1)}
-					{long && <span class="muted"> ({r.count} đánh giá trên TikTok Shop)</span>}
+					{long && <span class="muted">{t.ttRatings(r.count)}</span>}
 				</span>
 			)}
 			{sold > 0 && (
-				<span title="Gồm lượt bán trên TikTok Shop và website">
-					Đã bán {formatCount(sold)}
-					{long && <span class="muted"> trên TikTok Shop và website</span>}
+				<span title={t.soldTitle}>
+					{t.sold(formatCount(sold, lang))}
+					{long && <span class="muted">{t.soldWhere}</span>}
 				</span>
 			)}
 		</p>
 	);
 }
 
-export function ProductCard({ s, product, eager = false }: { s: Settings; product: Product; eager?: boolean }) {
+/** `product` is already in `lang` (localizeProduct). */
+export function ProductCard({ s, lang, product, eager = false }: { s: Settings; lang: Lang; product: Product; eager?: boolean }) {
+	const t = text[lang];
 	const sku = leadSku(product);
 	const soldOut = isSoldOut(product);
 	const views = productViews(product);
 	const off = sku ? percentOff(sku.price, sku.compareAtPrice) : undefined;
 	const image = product.images[0] ?? "/media/icon-512.png";
 	const single = product.skus.length === 1 && sku && !soldOut;
+	const href = productPath(product, lang);
 	return (
 		<article class={`product-card window${soldOut ? " is-soldout" : ""}`}>
-			<a class="product-card__media" href={productPath(product)} tabindex={-1} aria-hidden="true">
+			<a class="product-card__media" href={href} tabindex={-1} aria-hidden="true">
 				<img
 					src={imageSrc(s, image, 480)}
 					width="400"
@@ -99,32 +105,32 @@ export function ProductCard({ s, product, eager = false }: { s: Settings; produc
 					fetchpriority={eager ? "high" : undefined}
 				/>
 				{off && !soldOut && <span class="tag tag--sale product-card__off">-{off}%</span>}
-				{soldOut && <span class="tag tag--muted product-card__off">Hết hàng</span>}
+				{soldOut && <span class="tag tag--muted product-card__off">{t.soldOut}</span>}
 				{views > 0 && (
 					<span class="product-card__views">
-						<Icon name="play" size={12} /> {formatCount(views)}
+						<Icon name="play" size={12} /> {formatCount(views, lang)}
 					</span>
 				)}
 			</a>
 			<div class="product-card__body">
-				<span class="eyebrow">{collectionName(product.collection)}</span>
+				<span class="eyebrow">{collectionName(product.collection, lang)}</span>
 				<h3 class="product-card__title">
-					<a href={productPath(product)}>{product.title}</a>
+					<a href={href}>{product.title}</a>
 				</h3>
-				<Price product={product} showTag={false} />
+				<Price product={product} lang={lang} showTag={false} />
 				<div class="product-card__foot">
-					<TikTokStats product={product} />
+					<TikTokStats product={product} lang={lang} />
 					{single ? (
 						<button
 							type="button"
 							class="icon-btn icon-btn--accent"
-							aria-label={`Thêm ${product.title} vào giỏ`}
+							aria-label={t.addToCartLabel(product.title)}
 							data-add-to-cart={JSON.stringify({ productId: product.id, skuId: sku.id, price: sku.price })}
 						>
 							<Icon name="plus" />
 						</button>
 					) : (
-						<a class="icon-btn" href={productPath(product)} aria-label={`Chọn mẫu ${product.title}`}>
+						<a class="icon-btn" href={href} aria-label={t.chooseVariantLabel(product.title)}>
 							<Icon name="chevron" />
 						</a>
 					)}
@@ -134,11 +140,11 @@ export function ProductCard({ s, product, eager = false }: { s: Settings; produc
 	);
 }
 
-export function ProductGrid({ s, products, eagerFirst = 0 }: { s: Settings; products: Product[]; eagerFirst?: number }) {
+export function ProductGrid({ s, lang, products, eagerFirst = 0 }: { s: Settings; lang: Lang; products: Product[]; eagerFirst?: number }) {
 	return (
 		<div class="product-grid">
 			{products.map((p, i) => (
-				<ProductCard s={s} product={p} eager={i < eagerFirst} />
+				<ProductCard s={s} lang={lang} product={p} eager={i < eagerFirst} />
 			))}
 		</div>
 	);
@@ -146,30 +152,34 @@ export function ProductGrid({ s, products, eagerFirst = 0 }: { s: Settings; prod
 
 /**
  * A TikTok video as a lightweight facade: the cover and view count load with the page, and
- * TikTok's official embed player loads only when the shopper taps play.
+ * TikTok's official embed player loads only when the shopper taps play. Video titles are the
+ * TikTok captions, in Vietnamese on every page.
  */
-export function VideoCard({ video, product, compact = false }: { video: Video; product?: Product; compact?: boolean }) {
+export function VideoCard({ video, lang, product, compact = false }: { video: Video; lang: Lang; product?: Product; compact?: boolean }) {
+	const t = text[lang];
 	return (
 		<figure class={`video-card window${compact ? " video-card--compact" : ""}`}>
-			<button type="button" class="video-card__play" data-tiktok-play={video.id} aria-label={`Phát video: ${video.title || "TikTok"}`}>
+			<button type="button" class="video-card__play" data-tiktok-play={video.id} aria-label={t.playVideo(video.title || "TikTok")}>
 				<img src={video.cover} width="270" height="480" alt="" loading="lazy" decoding="async" />
 				<span class="video-card__views">
-					<Icon name="play" size={12} /> {formatCount(video.views)} lượt xem
+					<Icon name="play" size={12} /> {t.views(formatCount(video.views, lang))}
 				</span>
 				<span class="video-card__btn" aria-hidden="true">
 					<Icon name="play" size={28} />
 				</span>
 			</button>
 			<figcaption>
-				<p class="video-card__title">{video.title}</p>
+				<p class="video-card__title" lang={lang === "vi" ? undefined : "vi"}>
+					{video.title}
+				</p>
 				<p class="small muted">
 					<a href={tiktokVideoUrl(video.id)} target="_blank" rel="noopener">
-						@leduyenminh trên TikTok
+						{t.onTikTok("leduyenminh")}
 					</a>
 					{product && (
 						<>
 							{" · "}
-							<a href={productPath(product)}>Xem sản phẩm</a>
+							<a href={productPath(product, lang)}>{t.viewProduct}</a>
 						</>
 					)}
 				</p>
@@ -186,11 +196,12 @@ export function Rail({ children, label }: { children: Child; label: string }) {
 	);
 }
 
-export function Perks({ s }: { s: Settings }) {
+export function Perks({ s, lang }: { s: Settings; lang: Lang }) {
+	const p = text[lang].perks;
 	const items = [
-		{ icon: "truck", title: "Freeship", text: `Đơn từ ${formatVnd(s.shipping.freeThreshold)}` },
-		{ icon: "cash", title: "COD toàn quốc", text: "Kiểm tra rồi mới trả tiền" },
-		{ icon: "qr", title: "Chuyển khoản VietQR", text: "Quét mã bằng app ngân hàng bất kỳ" },
+		{ icon: "truck", title: p.freeTitle, text: p.freeText(formatVnd(s.shipping.freeThreshold, lang)) },
+		{ icon: "cash", title: p.codTitle, text: p.codText },
+		{ icon: "qr", title: p.qrTitle, text: p.qrText },
 	];
 	return (
 		<ul class="perks">

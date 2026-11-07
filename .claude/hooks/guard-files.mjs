@@ -31,7 +31,8 @@ const PII_KEYS =
 const PII_ARG = new RegExp(`(^|[{,(\\s])\\s*(\\.\\.\\.\\s*)?(${PII_KEYS})\\s*(?=[,}:)]|$)`, "m");
 const PII_MEMBER = /\.(customer|phone|email|address|accessToken|note|street|ward|content|description)\b|\bheader\s*\(|\bheaders\.get\s*\(|\bjson\s*\(\s*\)/;
 
-const PRIVATE_ROUTE = /app\.(get|post|all|use)\(\s*["'`]\/(don-hang|admin|thanh-toan|gio-hang|api\/)/;
+// Vietnamese and English (/en) order, cart and checkout pages, admin and the APIs.
+const PRIVATE_ROUTE = /app\.(get|post|all|use)\(\s*["'`]\/(don-hang|admin|thanh-toan|gio-hang|api\/|en\/(cart|checkout|orders)\b)/;
 // The shop takes COD and VietQR to its BIDV account only (CLAUDE.md, Hard rules).
 const GATEWAY = /\b(momo|zalopay|zalo_?pay|vnpay|vnpayment|payoo|onepay|stripe|paypal|napas_?card|card)\b|MOMO_|ZALOPAY_|VNPAY_/i;
 const PAYMENT_METHOD_LINE = /PaymentMethod\s*=|paymentMethod:\s*z\.enum|enabledPaymentMethods/;

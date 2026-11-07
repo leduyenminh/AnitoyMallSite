@@ -1,0 +1,125 @@
+{
+	"$comment": "English text for the product pages under /en, drafted from the Vietnamese TikTok Shop listings for the seller to review before deploying. Keep facts (sizes, materials, ages, origin) exactly as in the Vietnamese listing. `products` is keyed by product id; `source` is the hash of the Vietnamese title and description the text was translated from: when an import changes them, the English page shows Vietnamese again and `npm run check` names the product and its new hash, so re-check the translation and update `source`. `skuNames`, `attributeNames` and `attributeValues` translate exact Vietnamese wording; anything not listed is shown as it is (names like Frieren or Kafka need no entry). `note` is for the reviewer and never shown.",
+	"products": {
+		"tt-1731581424295380108": {
+			"slug": "frieren-fern-stark-chibi-figure-rotating-head-pvc",
+			"source": "cfb71e06",
+			"title": "ANIToy Elf Mage Frieren, Mage Fern & Warrior Stark Figure – Rotating Head, PVC Plastic, Study & Work Desk Decor",
+			"description": "Figure of Frieren, the thousand-year-old elf mage\n\n✨ Product information: ✨\nFrieren mage figure with a rotating joint, made of PVC plastic. The product does not come with a box. The head turns easily on its joint and the finish is good. The outfit trim has gold glitter for a distinctive accent.\n\n✨ Material and design: ✨\nMade of PVC plastic with a good finish, so there is very little excess plastic. The figure's head has a rotating joint so it can be turned freely. The gold-glitter outfit trim adds to its looks. The figure is a nice decoration for a study or work desk.\n\n✨ Note: ✨\nThe figure does not include a box. PVC plastic, durable and good-looking. Ideal for decorating your work or study space.",
+			"note": "The TikTok specification \"ĐẶC ĐIỂM VẬT LIỆU: PVC miễn phí\" means \"PVC-free\", which contradicts the description (made of PVC). It is translated as written; consider fixing it on TikTok Shop."
+		},
+		"tt-1731406172224063628": {
+			"slug": "frieren-fern-himmel-acrylic-keychain",
+			"source": "31fd8266",
+			"title": "Anitoy Premium Acrylic Keychain – Frieren: Beyond Journey's End – Frieren, Fern, Himmel, Shark",
+			"description": "The Frieren, Fern and Himmel keychains are made of acrylic, so they are durable and hard to break or scratch. Their unique design is sure to catch the eye.\n\nThe keychain is 6 cm, a good size for a keychain that is easy to carry and use. The Frieren, Fern and Himmel keychains can decorate your keys, handbag or backpack, or make a gift for friends and family.\n\nWith a unique design and durable material, they are a great choice for anyone who loves Frieren, Fern and Himmel.",
+			"note": "The Vietnamese title and SKU say \"Shark\" (probably Stark); kept as written."
+		},
+		"tt-1731739548394554508": {
+			"slug": "osakana-neko-standing-holding-fish-figure-20cm",
+			"source": "f3dd177c",
+			"title": "ANITOY Osakana Neko Figure, Standing and Holding a Fish – Kawaii Kinako, PVC, 200 g, 20 cm – Desk & Study Decor Toy",
+			"description": "The Osakana Neko figure is a unique and adorable decoration. Made of PVC, it is durable, easy to clean and water-resistant. Weighing 200 g and standing about 20 cm tall, it fits easily on a desk, a bookshelf or anywhere you like.\n\nComes with a base and a fish for the character to hold. The base is white plastic.\n\nSome real photos of the product are included so you can see what it looks like before you buy.",
+			"note": "The Vietnamese title says \"PVCK\"; translated as PVC, as in the description."
+		},
+		"tt-1732681072582362252": {
+			"slug": "neko-kinako-purple-hooded-cloak-sitting-figure-10cm",
+			"source": "a9d49ce1",
+			"title": "ANITOY Neko Kinako Figure in a Purple Hooded Cloak, Sitting, 10 cm, Plastic – Kawaii Decor Toy",
+			"description": "ANITOY Neko Kinako Figure\n\n✨ Kawaii figure: ANITOY Neko Kinako Figure in a Purple Hooded Cloak, Sitting, 10 cm, Plastic – Kawaii Decor Toy. 💜\n\nProduct features\n\nAdditional information\n\nThere is no information about features or characteristics other than those stated. Please see the photos and description for the most accurate picture. 📸📝\n\nNote\n\nThe information above is based only on the product data provided. There are no other features or characteristics. 📝🚫"
+		},
+		"tt-1730183145967224972": {
+			"slug": "chainsaw-man-denji-aki-makima-power-pochita-figure-9cm",
+			"source": "f7c12f72",
+			"title": "Anitoy Chainsaw Man Figure – Denji, Aki, Makima, Power, Pochita – PVC 9 cm Toy",
+			"description": "The Chainsaw Man Denji, Aki, Makima, Power and Pochita PVC 9 cm figure is a must-have for Anime & Manga fans. Standing 9 cm tall, it is a mini PVC figure made of high-quality PVC, so it is durable and easy to clean.\n\nThe range includes Anime & Manga characters such as Denji, Pochita, Makima, Power and Aki, designed with intricate detail for a beautiful, lifelike display piece. Made with high precision, it is a great accent for any space.\n\nSuitable for children aged 8 and up; made in China. Combining high-quality PVC with detailed design, it makes a great gift for Anime & Manga fans."
+		},
+		"tt-1731012705142212748": {
+			"slug": "chainsaw-man-denji-power-mini-figure",
+			"source": "b9639475",
+			"title": "Anitoy Mini Chainsaw Man Character Figure – Denji, Power – Cute Demon Hunters",
+			"description": "Anitoy Denji and Power posed figures\n\nMaterial: PVC plastic\n\nHeight: 9.8 cm\n\nWeight: 70 g\n\nDenji pulling the cord, Denji with chainsaws on both arms, shy Power, Power holding a hammer, Chainsaw Man with Pochita"
+		},
+		"tt-1731969014499674252": {
+			"slug": "honkai-star-rail-acrylic-standee-18cm",
+			"source": "5ee107da",
+			"title": "ANITOY Large 18 cm Acrylic (Mica) Standee – Honkai: Star Rail (HSR) Characters with Name Plate",
+			"description": "Mall Of Minn - Anitoy: anime, manga and game accessories shop\n\nPRODUCT INFORMATION:",
+			"note": "The Vietnamese description is only a heading; the English one is too. Specification \"PVC miễn phí\" (PVC-free) is translated as written."
+		},
+		"tt-1732037239614048396": {
+			"slug": "honkai-star-rail-phone-strap",
+			"source": "ab421db8",
+			"title": "Honkai: Star Rail Phone Strap – Silver Wolf, Kafka, Dan Heng, Jing Yuan, Yanqing, Blade – Phone Decoration",
+			"description": "The Honkai: Star Rail character phone strap is a unique, fun product for fans of the game Honkai: Star Rail. With an attractive design and sturdy acrylic, it lets you carry your phone easily without worrying about dropping or losing it.\n\nIt comes in 6 characters: Silver Wolf, Dan Heng, Kafka, Blade, Jing Yuan and Yanqing. Each character has its own design to suit every taste. Pick your favourite character to show your personality and style.\n\nBesides holding your phone, it can decorate other things such as backpacks and handbags, or make a gift for friends and family. Made of sturdy acrylic, it is a nice way to show someone you care.\n\nIn short, the Honkai: Star Rail character phone strap is a unique, fun product that lets you carry your phone easily without worrying about dropping or losing it. It can also decorate other items and make a gift for family and friends. Choose your favourite character to show your personality and style.",
+			"note": "\"Danheng\" is written \"Dan Heng\", the game's English spelling."
+		},
+		"tt-1731012707779119244": {
+			"slug": "genshin-impact-acrylic-character-keychain",
+			"source": "f950f6de",
+			"title": "ANITOY Genshin Impact Acrylic Character Keychain – Yae Miko, Zhongli, Diluc, Klee, Venti, Xiao, Ganyu, Keqing, Kazuha, Tartaglia",
+			"description": "Genshin Impact keychain\n\nSize: acrylic thickness 3.5 mm, keychain length 6 cm\n\nSome real photos:"
+		},
+		"v-frieren-20cm": {
+			"slug": "frieren-holding-flowers-figure-20cm-with-base",
+			"source": "08c33fbc",
+			"title": "Frieren Figure 20 cm, Standing and Holding Flowers – Frieren: Beyond Journey's End – with Base, No Box",
+			"description": "Frieren holding a bouquet in memory of Himmel – the most memorable moment of the series. 20 cm tall, with a display base (no box)."
+		},
+		"v-osakana-sitting": {
+			"slug": "osakana-neko-chan-sitting-figure",
+			"source": "e51694c6",
+			"title": "Osakana Neko-chan Sitting Figure – My Cat Is a Kawaii Girl",
+			"description": "My Cat Is a Kawaii Girl – Osakana neko, sitting, a very chill decoration for your work or study corner."
+		},
+		"v-kimetsu": {
+			"slug": "demon-slayer-kimetsu-no-yaiba-figure-tanjirou-nezuko-zenitsu",
+			"source": "a45a62f0",
+			"title": "Demon Slayer: Kimetsu no Yaiba Figure – Tanjirou, Nezuko, Zenitsu, Inosuke, Giyu, Shinobu",
+			"description": "Demon Slayer (Kimetsu no Yaiba) character figures, many characters to choose from."
+		}
+	},
+	"skuNames": {
+		"Mặc định": "Default",
+		"Tiêu chuẩn": "Standard",
+		"Chainsaw Man kèm Pochita": "Chainsaw Man with Pochita",
+		"Power ngại ngùng": "Shy Power",
+		"Power cầm búa": "Power holding a hammer",
+		"Denji tay cưa": "Denji with chainsaw arms",
+		"Denji kéo nút": "Denji pulling the cord",
+		"Danheng": "Dan Heng"
+	},
+	"attributeNames": {
+		"Suitable age": "Suitable age",
+		"Suitable Age": "Suitable age",
+		"ĐẶC ĐIỂM VẬT LIỆU": "Material features",
+		"Pin trong sản phẩm": "Batteries included",
+		"Quốc gia xuất xứ": "Country of origin",
+		"Khu vực xuất xứ": "Region of origin",
+		"Vật liệu": "Material",
+		"Chất liệu": "Material",
+		"Chủ đề đồ chơi": "Toy theme",
+		"Giới tính trẻ em": "Gender",
+		"Nhân vật hoạt hình": "Characters",
+		"Số lượng trên mỗi gói": "Quantity per pack",
+		"Loại bảo hành": "Warranty",
+		"Chiều cao": "Height",
+		"Đế trưng bày": "Display base"
+	},
+	"attributeValues": {
+		"Trên 12 tuổi": "12 years and up",
+		"Trên 8 tuổi": "8 years and up",
+		"PVC miễn phí": "PVC-free",
+		"Latex miễn phí,Không chứa BPA": "Latex-free, BPA-free",
+		"Không": "No",
+		"Trung Quốc Đại Lục": "Mainland China",
+		"Nhựa": "Plastic",
+		"Nhựa PVC": "PVC plastic",
+		"decor,Trang trí,Sưu tập,Anime & Manga,Fantasy & Sci-Fi": "Decor, Decoration, Collectibles, Anime & Manga, Fantasy & Sci-Fi",
+		"Anime & Manga,TV & Phim,Sưu tập,Trang trí": "Anime & Manga, TV & Movies, Collectibles, Decoration",
+		"Sưu tập": "Collectibles",
+		"Phi giới tính": "Unisex",
+		"Không bảo hành": "No warranty",
+		"Có (no box)": "Yes (no box)"
+	}
+}

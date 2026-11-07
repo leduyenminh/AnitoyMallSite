@@ -4,7 +4,118 @@
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
-const vnd = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
+
+// Pages under /en are English (<html lang="en">); everything else is Vietnamese. Strings with
+// markup are static; values put into them go through esc() or money() at the call site.
+const LANG = document.documentElement.lang === "en" ? "en" : "vi";
+const TEXT = {
+	vi: {
+		locale: "vi-VN",
+		paths: { cart: "/gio-hang", checkout: "/thanh-toan", products: "/san-pham", product: "/san-pham/" },
+		tooFast: "Bạn thao tác nhanh quá, thử lại sau ít giây nhé.",
+		issues: { unavailable: "Đã hết hàng", insufficient_stock: "Chỉ còn ít hơn số bạn chọn", price_changed: "Giá đã thay đổi" },
+		left: (n) => ` (còn ${n})`,
+		decrease: "Giảm",
+		increase: "Tăng",
+		quantity: "Số lượng",
+		remove: "Xoá",
+		cartEmpty: "Giỏ hàng đang trống.",
+		shopNow: "Mua sắm ngay",
+		shipEnterAddress: "Nhập địa chỉ để tính",
+		shipAtCheckout: "Tính khi thanh toán",
+		free: "Miễn phí",
+		shipMore: (amount) => `Mua thêm <strong>${amount}</strong> để được freeship`,
+		shipFree: "🎉 Đơn hàng được <strong>miễn phí vận chuyển</strong>",
+		quoteNotice: "Một số sản phẩm đã thay đổi (hết hàng, giảm số lượng hoặc đổi giá). Vui lòng kiểm tra lại giỏ hàng.",
+		placeOrder: "Đặt hàng",
+		placing: "Đang đặt hàng…",
+		added: "Đã thêm vào giỏ hàng",
+		addedSku: (name) => `Đã thêm <strong>${name}</strong> vào giỏ`,
+		viewCart: "Xem giỏ",
+		inStock: (n) => `Còn ${n} sản phẩm`,
+		soldOut: "Hết hàng",
+		video: "Video TikTok",
+		closeVideo: "Đóng video",
+		errors: {
+			invalid: "Vui lòng kiểm tra lại các thông tin được đánh dấu.",
+			quote_changed: "Giỏ hàng hoặc phí giao hàng vừa thay đổi. Đã cập nhật lại, vui lòng kiểm tra rồi đặt lại.",
+			shipping_pending: "Vui lòng chọn phường / xã trong danh sách để tính phí giao hàng.",
+			too_many_orders: "Số điện thoại hoặc mạng của bạn đang có quá nhiều đơn chưa hoàn tất. Vui lòng hoàn tất đơn trước hoặc thử lại sau.",
+			verification_failed: "Xác minh chống spam chưa thành công, vui lòng thử lại.",
+			rate_limited: "Bạn thao tác quá nhanh. Vui lòng đợi một phút rồi thử lại.",
+			server_error: "Có lỗi xảy ra, vui lòng thử lại.",
+		},
+		copied: "Đã sao chép",
+		countdown: (h, m, s) => `${h ? `${h} giờ ` : ""}${m} phút ${s} giây nữa`,
+		now: "ngay bây giờ",
+		status: { pending: "Chờ xác nhận", confirmed: "Đã xác nhận", shipped: "Đang giao", delivered: "Đã giao", cancelled: "Đã huỷ", paid: "Đã thanh toán", expired: "Hết hạn" },
+		lookupNotFound: "Không tìm thấy đơn hàng với mã và số điện thoại này.",
+		order: "Đơn",
+		placedAt: "đặt lúc",
+		payment: "Thanh toán:",
+		paid: "Đã thanh toán",
+		payOnDelivery: "Trả khi nhận hàng",
+		unpaid: "Chưa thanh toán",
+		shipping: "Phí vận chuyển",
+		total: "Tổng cộng",
+		history: "Lịch sử",
+		lookupHint: "Để xem địa chỉ và thanh toán lại, mở đường dẫn đơn hàng bạn nhận được khi đặt.",
+	},
+	en: {
+		locale: "en-GB",
+		paths: { cart: "/en/cart", checkout: "/en/checkout", products: "/en/products", product: "/en/products/" },
+		tooFast: "That was a bit fast – please try again in a few seconds.",
+		issues: { unavailable: "Sold out", insufficient_stock: "Fewer left than you chose", price_changed: "Price changed" },
+		left: (n) => ` (${n} left)`,
+		decrease: "Decrease",
+		increase: "Increase",
+		quantity: "Quantity",
+		remove: "Remove",
+		cartEmpty: "Your cart is empty.",
+		shopNow: "Shop now",
+		shipEnterAddress: "Enter your address to calculate",
+		shipAtCheckout: "Calculated at checkout",
+		free: "Free",
+		shipMore: (amount) => `Add <strong>${amount}</strong> more for free shipping`,
+		shipFree: "🎉 Your order ships <strong>free</strong>",
+		quoteNotice: "Some items have changed (sold out, fewer left or a new price). Please check your cart.",
+		placeOrder: "Place order",
+		placing: "Placing your order…",
+		added: "Added to your cart",
+		addedSku: (name) => `Added <strong>${name}</strong> to your cart`,
+		viewCart: "View cart",
+		inStock: (n) => `${n} in stock`,
+		soldOut: "Sold out",
+		video: "TikTok video",
+		closeVideo: "Close video",
+		errors: {
+			invalid: "Please check the highlighted fields.",
+			quote_changed: "Your cart or the delivery fee has just changed. It has been updated; please check it and place the order again.",
+			shipping_pending: "Please choose your ward from the list to calculate the delivery fee.",
+			too_many_orders: "Your phone number or network has too many unfinished orders. Please complete those first or try again later.",
+			verification_failed: "The anti-spam check didn't pass. Please try again.",
+			rate_limited: "Too many attempts. Please wait a minute and try again.",
+			server_error: "Something went wrong. Please try again.",
+		},
+		copied: "Copied",
+		countdown: (h, m, s) => `${h ? `${h} h ` : ""}${m} min ${s} s from now`,
+		now: "now",
+		status: { pending: "Awaiting confirmation", confirmed: "Confirmed", shipped: "In transit", delivered: "Delivered", cancelled: "Cancelled", paid: "Paid", expired: "Expired" },
+		lookupNotFound: "No order matches this code and phone number.",
+		order: "Order",
+		placedAt: "placed",
+		payment: "Payment:",
+		paid: "Paid",
+		payOnDelivery: "Pay on delivery",
+		unpaid: "Not paid yet",
+		shipping: "Shipping",
+		total: "Total",
+		history: "History",
+		lookupHint: "To see the address or pay again, open the order link you received when you ordered.",
+	},
+};
+const T = TEXT[LANG];
+const vnd = new Intl.NumberFormat(T.locale, { style: "currency", currency: "VND", maximumFractionDigits: 0 });
 const money = (n) => vnd.format(n);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const store = {
@@ -129,7 +240,7 @@ function initTaskbar() {
 	}
 	const clock = $("[data-clock]");
 	if (clock) {
-		const tick = () => (clock.textContent = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }));
+		const tick = () => (clock.textContent = new Date().toLocaleTimeString(T.locale, { hour: "2-digit", minute: "2-digit" }));
 		tick();
 		setInterval(tick, 30_000);
 	}
@@ -193,10 +304,10 @@ async function refreshQuote() {
 		lastQuote = { lines: [], itemCount: 0, subtotal: 0, shippingFee: 0, total: 0, freeShippingRemaining: freeThreshold, hasIssues: false, shippingPending: false };
 	} else {
 		const address = quoteAddress();
-		const res = await api("/api/cart/quote", { items, ...(address ? { address } : {}) });
+		const res = await api("/api/cart/quote", { items, ...(address ? { address } : {}), ...(LANG === "vi" ? {} : { lang: LANG }) });
 		if (seq !== quoteSeq) return lastQuote;
 		if (!res.ok) {
-			if (res.status === 429) toast("Bạn thao tác nhanh quá, thử lại sau ít giây nhé.");
+			if (res.status === 429) toast(esc(T.tooFast));
 			return lastQuote;
 		}
 		lastQuote = res.data;
@@ -205,27 +316,25 @@ async function refreshQuote() {
 	return lastQuote;
 }
 
-const issueText = { unavailable: "Đã hết hàng", insufficient_stock: "Chỉ còn ít hơn số bạn chọn", price_changed: "Giá đã thay đổi" };
-
 function lineHtml(l, editable) {
-	const issue = l.issue ? `<span class="line__issue">${issueText[l.issue]}${l.issue === "insufficient_stock" ? ` (còn ${l.available})` : ""}</span>` : "";
+	const issue = l.issue ? `<span class="line__issue">${esc(T.issues[l.issue])}${l.issue === "insufficient_stock" ? esc(T.left(l.available)) : ""}</span>` : "";
 	const controls = editable
 		? `<div><span class="stepper" data-line-stepper="${esc(l.skuId)}">
-				<button type="button" aria-label="Giảm" data-line-step="-1">−</button>
-				<input type="number" min="0" max="20" value="${l.requested}" aria-label="Số lượng" data-line-qty>
-				<button type="button" aria-label="Tăng" data-line-step="1">+</button></span>
-				<button type="button" class="line__remove" data-line-remove="${esc(l.skuId)}">Xoá</button></div>`
-		: `<p class="small muted">× ${l.quantity}</p>`;
+				<button type="button" aria-label="${esc(T.decrease)}" data-line-step="-1">−</button>
+				<input type="number" min="0" max="20" value="${esc(l.requested)}" aria-label="${esc(T.quantity)}" data-line-qty>
+				<button type="button" aria-label="${esc(T.increase)}" data-line-step="1">+</button></span>
+				<button type="button" class="line__remove" data-line-remove="${esc(l.skuId)}">${esc(T.remove)}</button></div>`
+		: `<p class="small muted">× ${esc(l.quantity)}</p>`;
 	return `<li class="line">
 		${l.image ? `<img src="${esc(l.image)}" width="56" height="56" alt="" loading="lazy">` : "<span></span>"}
-		<div><a href="/san-pham/${esc(l.slug)}">${esc(l.title)}</a>
+		<div><a href="${esc(T.paths.product + l.slug)}">${esc(l.title)}</a>
 			<p class="small muted">${esc(l.skuName)} · ${money(l.unitPrice)}</p>${issue}${controls}</div>
 		<strong>${money(l.lineTotal)}</strong></li>`;
 }
 
 function renderQuote(q) {
 	renderBadges();
-	const empty = `<div class="empty"><p class="muted">Giỏ hàng đang trống.</p><a class="btn btn--primary" href="/san-pham">Mua sắm ngay</a></div>`;
+	const empty = `<div class="empty"><p class="muted">${esc(T.cartEmpty)}</p><a class="btn btn--primary" href="${esc(T.paths.products)}">${esc(T.shopNow)}</a></div>`;
 	$$("[data-cart-lines]").forEach((el) => {
 		el.innerHTML = q.lines.length ? `<ul class="lines">${q.lines.map((l) => lineHtml(l, true)).join("")}</ul>` : empty;
 	});
@@ -237,11 +346,11 @@ function renderQuote(q) {
 		? "–"
 		: q.shippingPending
 			? $("[data-checkout-form]")
-				? "Nhập địa chỉ để tính"
-				: "Tính khi thanh toán"
+				? T.shipEnterAddress
+				: T.shipAtCheckout
 			: q.shippingFee
 				? money(q.shippingFee)
-				: "Miễn phí";
+				: T.free;
 	$$("[data-sum-shipping]").forEach((el) => (el.textContent = shippingText));
 	$$("[data-ward-hint]").forEach((el) => (el.hidden = q.addressIssue !== "ward"));
 	$$("[data-sum-total]").forEach((el) => (el.textContent = money(q.total)));
@@ -249,18 +358,17 @@ function renderQuote(q) {
 		el.hidden = !q.itemCount;
 		const pct = Math.min(100, Math.round((q.subtotal / freeThreshold) * 100));
 		$("[data-ship-bar]", el).style.width = `${pct}%`;
-		$("[data-ship-text]", el).innerHTML =
-			q.freeShippingRemaining > 0 ? `Mua thêm <strong>${money(q.freeShippingRemaining)}</strong> để được freeship` : "🎉 Đơn hàng được <strong>miễn phí vận chuyển</strong>";
+		$("[data-ship-text]", el).innerHTML = q.freeShippingRemaining > 0 ? T.shipMore(money(q.freeShippingRemaining)) : T.shipFree;
 	});
 	$$("[data-cart-checkout]").forEach((a) => a.classList.toggle("is-disabled", !q.itemCount));
 	$$("[data-quote-notice]").forEach((el) => {
 		el.hidden = !q.hasIssues;
-		el.textContent = q.hasIssues ? "Một số sản phẩm đã thay đổi (hết hàng, giảm số lượng hoặc đổi giá). Vui lòng kiểm tra lại giỏ hàng." : "";
+		el.textContent = q.hasIssues ? T.quoteNotice : "";
 	});
 	const submit = $("[data-submit]");
 	if (submit) {
 		submit.disabled = !q.itemCount;
-		submit.textContent = q.itemCount && !q.shippingPending ? `Đặt hàng · ${money(q.total)}` : "Đặt hàng";
+		submit.textContent = q.itemCount && !q.shippingPending ? `${T.placeOrder} · ${money(q.total)}` : T.placeOrder;
 	}
 }
 
@@ -293,7 +401,7 @@ function initCart() {
 		if (add) {
 			const item = JSON.parse(add.dataset.addToCart);
 			cart.add(item, 1);
-			toast(`Đã thêm vào giỏ hàng · <a href="/gio-hang" data-cart-open>Xem giỏ</a>`);
+			toast(`${esc(T.added)} · <a href="${esc(T.paths.cart)}" data-cart-open>${esc(T.viewCart)}</a>`);
 		}
 		const step = e.target.closest("[data-line-step]");
 		if (step) {
@@ -339,7 +447,7 @@ function initProduct() {
 			off.textContent = pct ? `-${pct}%` : "";
 		}
 		const stock = $("[data-stock]", root);
-		if (stock) stock.textContent = sku.stock > 0 ? `Còn ${sku.stock} sản phẩm` : "Hết hàng";
+		if (stock) stock.textContent = sku.stock > 0 ? T.inStock(sku.stock) : T.soldOut;
 		const name = $("[data-variant-name]", root);
 		if (name) name.textContent = sku.name;
 		$$("[data-add-current], [data-buy-now]", root).forEach((b) => (b.disabled = sku.stock <= 0));
@@ -368,13 +476,13 @@ function initProduct() {
 	$$("[data-add-current]", root).forEach((b) =>
 		b.addEventListener("click", () => {
 			cart.add({ productId: product.id, skuId: sku.id, price: sku.price }, qty());
-			toast(`Đã thêm <strong>${esc(sku.name)}</strong> vào giỏ · <a href="/gio-hang" data-cart-open>Xem giỏ</a>`);
+			toast(`${T.addedSku(esc(sku.name))} · <a href="${esc(T.paths.cart)}" data-cart-open>${esc(T.viewCart)}</a>`);
 		}),
 	);
 	$$("[data-buy-now]", root).forEach((b) =>
 		b.addEventListener("click", () => {
 			cart.add({ productId: product.id, skuId: sku.id, price: sku.price }, qty());
-			location.href = "/thanh-toan";
+			location.href = T.paths.checkout;
 		}),
 	);
 
@@ -452,10 +560,10 @@ function initTikTok() {
 		modal.className = "modal";
 		modal.setAttribute("role", "dialog");
 		modal.setAttribute("aria-modal", "true");
-		modal.setAttribute("aria-label", "Video TikTok");
+		modal.setAttribute("aria-label", T.video);
 		modal.innerHTML = `<div class="modal__frame">
-			<button type="button" class="icon-btn modal__close" aria-label="Đóng video">✕</button>
-			<iframe src="https://www.tiktok.com/player/v1/${id}?autoplay=1&description=1&music_info=1&rel=0" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen title="Video TikTok"></iframe></div>`;
+			<button type="button" class="icon-btn modal__close" aria-label="${esc(T.closeVideo)}">✕</button>
+			<iframe src="https://www.tiktok.com/player/v1/${esc(id)}?autoplay=1&description=1&music_info=1&rel=0" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen title="${esc(T.video)}"></iframe></div>`;
 		modal.addEventListener("click", (ev) => {
 			if (ev.target === modal || ev.target.closest(".modal__close")) close();
 		});
@@ -468,15 +576,7 @@ function initTikTok() {
 
 // ------------------------------------------------------------------ checkout
 
-const errorText = {
-	invalid: "Vui lòng kiểm tra lại các thông tin được đánh dấu.",
-	quote_changed: "Giỏ hàng hoặc phí giao hàng vừa thay đổi. Đã cập nhật lại, vui lòng kiểm tra rồi đặt lại.",
-	shipping_pending: "Vui lòng chọn phường / xã trong danh sách để tính phí giao hàng.",
-	too_many_orders: "Số điện thoại hoặc mạng của bạn đang có quá nhiều đơn chưa hoàn tất. Vui lòng hoàn tất đơn trước hoặc thử lại sau.",
-	verification_failed: "Xác minh chống spam chưa thành công, vui lòng thử lại.",
-	rate_limited: "Bạn thao tác quá nhanh. Vui lòng đợi một phút rồi thử lại.",
-	server_error: "Có lỗi xảy ra, vui lòng thử lại.",
-};
+const errorText = T.errors;
 const fieldMap = {
 	"customer.name": "name",
 	"customer.phone": "phone",
@@ -547,12 +647,13 @@ function initCheckout() {
 		if (!payload.items.length) return;
 		const submit = $("[data-submit]", form);
 		submit.disabled = true;
-		submit.textContent = "Đang đặt hàng…";
+		submit.textContent = T.placing;
 		const res = await api("/api/orders", payload);
 		if (res.ok && res.data?.url) {
 			store.set(FORM_KEY, { name: get("name"), phone: get("phone"), email: get("email"), province: get("province"), ward: get("ward"), street: get("street") });
 			cart.clear();
-			location.href = res.data.url;
+			// The server links the Vietnamese order page; English checkouts open the same order under /en.
+			location.href = LANG === "en" ? String(res.data.url).replace(/^\/don-hang\//, "/en/orders/") : res.data.url;
 			return;
 		}
 		const code = res.data?.error || (res.status === 429 ? "rate_limited" : "server_error");
@@ -586,7 +687,7 @@ function initOrder() {
 		b.addEventListener("click", async () => {
 			try {
 				await navigator.clipboard.writeText(b.dataset.copy);
-				toast("Đã sao chép");
+				toast(esc(T.copied));
 			} catch {
 				toast(esc(b.dataset.copy));
 			}
@@ -601,7 +702,7 @@ function initOrder() {
 			const h = Math.floor(left / 3600000);
 			const m = Math.floor((left % 3600000) / 60000);
 			const s = Math.floor((left % 60000) / 1000);
-			countdown.textContent = left ? `${h ? `${h} giờ ` : ""}${m} phút ${String(s).padStart(2, "0")} giây nữa` : "ngay bây giờ";
+			countdown.textContent = left ? T.countdown(h, m, String(s).padStart(2, "0")) : T.now;
 		};
 		tick();
 		setInterval(tick, 1000);
@@ -622,7 +723,7 @@ function initOrder() {
 
 // ------------------------------------------------------------------ order lookup
 
-const statusText = { pending: "Chờ xác nhận", confirmed: "Đã xác nhận", shipped: "Đang giao", delivered: "Đã giao", cancelled: "Đã huỷ", paid: "Đã thanh toán", expired: "Hết hạn" };
+const statusText = T.status;
 
 function initLookup() {
 	const form = $("[data-lookup-form]");
@@ -633,24 +734,37 @@ function initLookup() {
 		e.preventDefault();
 		err.hidden = true;
 		const f = new FormData(form);
-		const res = await api("/api/orders/lookup", { code: String(f.get("code") || ""), phone: String(f.get("phone") || "") });
+		const res = await api("/api/orders/lookup", { code: String(f.get("code") || ""), phone: String(f.get("phone") || ""), ...(LANG === "vi" ? {} : { lang: LANG }) });
 		if (!res.ok) {
 			out.innerHTML = "";
-			err.textContent = res.status === 429 ? errorText.rate_limited : "Không tìm thấy đơn hàng với mã và số điện thoại này.";
+			err.textContent = res.status === 429 ? errorText.rate_limited : T.lookupNotFound;
 			err.hidden = false;
 			return;
 		}
 		const o = res.data;
-		const date = (iso) => new Date(iso).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
+		const date = (iso) => new Date(iso).toLocaleString(T.locale, { dateStyle: "short", timeStyle: "short" });
+		const status = (s) => esc(statusText[s] ?? s);
+		const payment = o.paymentStatus === "paid" ? T.paid : o.paymentMethod === "cod" ? T.payOnDelivery : T.unpaid;
 		out.innerHTML = `<section class="window card-pad" style="margin-top:16px">
-			<h2>Đơn <span class="mono">${esc(o.id)}</span> · <span class="status status--${esc(o.status)}">${statusText[o.status] ?? esc(o.status)}</span></h2>
-			<p class="muted">${esc(o.customer.name)} · ${esc(o.customer.phone)} · ${esc(o.province)} · đặt lúc ${date(o.createdAt)}</p>
-			<p>Thanh toán: <strong>${o.paymentStatus === "paid" ? "Đã thanh toán" : o.paymentMethod === "cod" ? "Trả khi nhận hàng" : "Chưa thanh toán"}</strong></p>
-			<ul class="lines">${o.lines.map((l) => `<li class="line">${l.image ? `<img src="${esc(l.image)}" width="56" height="56" alt="">` : "<span></span>"}<div><a href="/san-pham/${esc(l.slug)}">${esc(l.title)}</a><p class="small muted">${esc(l.skuName)} × ${l.quantity}</p></div><strong>${money(l.lineTotal)}</strong></li>`).join("")}</ul>
-			<dl class="totals" style="margin-top:12px"><dt>Phí vận chuyển</dt><dd>${o.shippingFee ? money(o.shippingFee) : "Miễn phí"}</dd><dt class="totals__grand">Tổng cộng</dt><dd class="totals__grand">${money(o.total)}</dd></dl>
-			<h3 style="margin-top:14px">Lịch sử</h3><ol class="timeline">${o.history.map((h) => `<li>${date(h.at)} – ${statusText[h.status] ?? esc(h.status)}</li>`).join("")}</ol>
-			<p class="small muted">Để xem địa chỉ và thanh toán lại, mở đường dẫn đơn hàng bạn nhận được khi đặt.</p></section>`;
+			<h2>${esc(T.order)} <span class="mono">${esc(o.id)}</span> · <span class="status status--${esc(o.status)}">${status(o.status)}</span></h2>
+			<p class="muted">${esc(o.customer.name)} · ${esc(o.customer.phone)} · ${esc(o.province)} · ${esc(T.placedAt)} ${esc(date(o.createdAt))}</p>
+			<p>${esc(T.payment)} <strong>${esc(payment)}</strong></p>
+			<ul class="lines">${o.lines.map((l) => `<li class="line">${l.image ? `<img src="${esc(l.image)}" width="56" height="56" alt="">` : "<span></span>"}<div><a href="${esc(T.paths.product + l.slug)}">${esc(l.title)}</a><p class="small muted">${esc(l.skuName)} × ${esc(l.quantity)}</p></div><strong>${money(l.lineTotal)}</strong></li>`).join("")}</ul>
+			<dl class="totals" style="margin-top:12px"><dt>${esc(T.shipping)}</dt><dd>${o.shippingFee ? money(o.shippingFee) : esc(T.free)}</dd><dt class="totals__grand">${esc(T.total)}</dt><dd class="totals__grand">${money(o.total)}</dd></dl>
+			<h3 style="margin-top:14px">${esc(T.history)}</h3><ol class="timeline">${o.history.map((h) => `<li>${esc(date(h.at))} – ${status(h.status)}</li>`).join("")}</ol>
+			<p class="small muted">${esc(T.lookupHint)}</p></section>`;
 	});
+}
+
+// ------------------------------------------------------------------ language hint
+
+/** On a Vietnamese page, a visitor whose browser doesn't ask for Vietnamese is told once about the English version. */
+function initLangHint() {
+	const link = $("[data-lang-switch='en']");
+	if (LANG !== "vi" || !link || (navigator.languages ?? [navigator.language]).some((l) => /^vi\b/i.test(l || ""))) return;
+	if (store.get("anitoy.langHint.v1", false)) return;
+	store.set("anitoy.langHint.v1", true);
+	toast(`<span lang="en">This shop is also in English: <a href="${esc(link.getAttribute("href"))}" hreflang="en">English version</a></span>`, 10000);
 }
 
 // ------------------------------------------------------------------ boot
@@ -663,3 +777,4 @@ initTikTok();
 initCheckout();
 initOrder();
 initLookup();
+initLangHint();

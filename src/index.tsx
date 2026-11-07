@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import type { Child } from "hono/jsx";
 import { applyFilters, collectionName, relatedProducts, sortLabels, videoById, type Filters, type SortKey } from "./lib/catalog";
-import { categories, collections, settings, site, wwwRedirect, type Settings } from "./lib/config";
+import { categories, collections, groupText, settings, site, wwwRedirect, type Settings } from "./lib/config";
 import { safeEqual, sha256Hex } from "./lib/crypto";
 import {
 	catalogVersion,
@@ -17,6 +17,7 @@ import {
 	updateProduct,
 	updateSku,
 } from "./lib/db";
+import { type Lang, langOf, LANGS, listingParams, otherLang, type PageKey, routes, translateQuery } from "./lib/i18n";
 import { allow, clientIp, ipHash, verifyTurnstile } from "./lib/limits";
 import { log } from "./lib/log";
 import {
@@ -32,7 +33,7 @@ import {
 	type OrderAction,
 } from "./lib/orders";
 import { handleBankTransaction, sepayAuthorized } from "./lib/payments";
-import { buildQuote } from "./lib/quote";
+import { buildQuote, type Quote } from "./lib/quote";
 import { ghnWards, priceShipping, ShippingAddressError } from "./lib/shipping";
 import {
 	breadcrumbJsonLd,
@@ -44,23 +45,26 @@ import {
 	metaDescription,
 	productJsonLd,
 	productPath,
+	type SitemapEntry,
 	sitemapXml,
 	storeJsonLd,
 } from "./lib/seo";
+import { englishSlug, englishText, localizeLines, localizeProduct } from "./lib/translations";
 import { ghnCallbackSchema, HCM_PROVINCE, isOrderCode, normalisePhone, normaliseOrderCode, lookupSchema, quoteSchema } from "./lib/validation";
 import { Document, THEME_BOOT, type PageMeta, type ViewCtx } from "./views/layout";
 import { AdminDocument, AdminOrder, AdminOrders, AdminProducts } from "./views/pages/admin";
 import { CartPage, CheckoutPage } from "./views/pages/checkout";
 import { HomePage } from "./views/pages/home";
 import { AboutPage, ErrorPage, faq, HelpPage, NotFoundPage, PolicyPage, VideosPage } from "./views/pages/info";
-import { ListingPage, PAGE_SIZE } from "./views/pages/listing";
+import { ListingPage, type ListingProps, PAGE_SIZE } from "./views/pages/listing";
 import { LookupPage, OrderPage } from "./views/pages/order";
 import { ProductPage } from "./views/pages/product";
+import { text } from "./views/text";
 
 declare const __BUILD_ID__: string;
 const BUILD = typeof __BUILD_ID__ === "string" ? __BUILD_ID__ : "dev";
 
-type App = { Bindings: Env; Variables: { s: Settings } };
+type App = { Bindings: Env; Variables: { s: Settings; lang: Lang } };
 type C = Context<App>;
 
 const app = new Hono<App>();
@@ -89,6 +93,7 @@ app.use("*", async (c, next) => {
 		return c.redirect(`${url.origin}${url.pathname.replace(/\/+$/, "") || "/"}${url.search}`, 301);
 	}
 	c.set("s", settings(c.env, url.origin));
+	c.set("lang", langOf(url.pathname));
 	await ensureDb(c.env.DB, c.get("s").pricing);
 	await next();
 	const h = c.res.headers;
@@ -138,182 +143,251 @@ const edgeCache = async (c: C, next: () => Promise<void>) => {
 
 // ------------------------------------------------------------------ rendering
 
-const viewCtx = (c: C, query?: string): ViewCtx => ({ s: c.get("s"), path: new URL(c.req.url).pathname, build: BUILD, query });
+const viewCtx = (c: C, query?: string): ViewCtx => {
+	const lang = c.get("lang");
+	return { s: c.get("s"), lang, path: new URL(c.req.url).pathname, build: BUILD, query, alt: routes[otherLang(lang)].home };
+};
 
-async function page(c: C, meta: PageMeta, body: Child, opts: { status?: number; cache?: string; query?: string } = {}) {
-	const html = await (<Document ctx={viewCtx(c, opts.query)} meta={meta}>{body}</Document>).toString();
+async function page(c: C, meta: PageMeta, body: Child, opts: { status?: number; cache?: string; query?: string; alt?: string } = {}) {
+	const other = otherLang(c.get("lang"));
+	const ctx = { ...viewCtx(c, opts.query), alt: opts.alt ?? meta.alternates?.[other] ?? routes[other].home };
+	const html = await (<Document ctx={ctx} meta={meta}>{body}</Document>).toString();
 	return c.html(`<!doctype html>${html}`, (opts.status ?? 200) as 200, { "Cache-Control": opts.cache ?? (meta.noindex ? NO_STORE : PUBLIC_PAGE) });
 }
 
 const titled = (t: string) => `${t} | ${site.name}`;
 
+/** A page's path in every language. */
+const inAll = (key: PageKey): Record<Lang, string> => ({ vi: routes.vi[key], en: routes.en[key] });
+
+/** The current query in the other language's listing parameter names. */
+const otherQuery = (c: C) => translateQuery(new URL(c.req.url).searchParams, c.get("lang"), otherLang(c.get("lang")));
+
 // ------------------------------------------------------------------ storefront pages
+// Every page exists in Vietnamese (/) and English (/en): same handlers, same data, same prices.
 
-app.get("/", edgeCache, async (c) => {
-	const s = c.get("s");
-	const products = await loadCatalog(c.env.DB);
-	return page(
-		c,
-		{
-			title: `${site.name} – Mô hình anime chibi Frieren, Neko, móc khoá | Freeship, COD`,
-			description: "Shop mô hình anime chibi của TikTok @leduyenminh: Frieren, Fern, Stark, Neko kawaii, figure 20cm, móc khoá acrylic. COD toàn quốc hoặc chuyển khoản VietQR.",
-			canonical: "/",
-			jsonLd: storeJsonLd(s),
-		},
-		<HomePage ctx={viewCtx(c)} products={products} />,
-	);
-});
-
-function readFilters(c: C, base: Partial<Filters> = {}): { filters: Filters; page: number } {
+function readFilters(c: C, lang: Lang, base: Partial<Filters> = {}): { filters: Filters; page: number } {
 	const q = c.req.query();
+	const p = listingParams[lang];
 	const num = (v?: string) => (v && /^\d+$/.test(v) ? Number(v) : undefined);
-	const sort = (q.sort && q.sort in sortLabels ? q.sort : "featured") as SortKey;
+	const sort = (q.sort && q.sort in sortLabels.vi ? q.sort : "featured") as SortKey;
 	return {
 		filters: {
 			q: q.q?.trim().slice(0, 100) || undefined,
-			collection: q.bst && q.bst in collections ? q.bst : undefined,
-			category: q.loai && q.loai in categories ? q.loai : undefined,
-			inStock: q["con-hang"] === "1",
-			minPrice: num(q["gia-tu"]),
-			maxPrice: num(q["gia-den"]),
+			collection: q[p.collection] && q[p.collection]! in collections ? q[p.collection] : undefined,
+			category: q[p.category] && q[p.category]! in categories ? q[p.category] : undefined,
+			inStock: q[p.inStock] === "1",
+			minPrice: num(q[p.minPrice]),
+			maxPrice: num(q[p.maxPrice]),
 			sort,
 			...base,
 		},
-		page: Math.max(1, num(q.trang) ?? 1),
+		page: Math.max(1, num(q[p.page]) ?? 1),
 	};
 }
 
-async function listing(c: C, opts: { title: string; intro?: string; basePath: string; base?: Partial<Filters>; crumbs: { name: string; href?: string }[]; noindex?: boolean }) {
+async function listing(
+	c: C,
+	lang: Lang,
+	opts: {
+		title: string;
+		intro?: string;
+		/** The listing's path in every language. */
+		paths: Record<Lang, string>;
+		scope: ListingProps["scope"];
+		base?: Partial<Filters>;
+		crumbs: { name: string; href?: string }[];
+		noindex?: boolean;
+	},
+) {
 	const s = c.get("s");
-	const { filters, page: pageNo } = readFilters(c, opts.base);
+	const t = text[lang];
+	const basePath = opts.paths[lang];
+	const { filters, page: pageNo } = readFilters(c, lang, opts.base);
 	const all = applyFilters(await loadCatalog(c.env.DB), filters, videoById);
 	const slice = all.slice((pageNo - 1) * PAGE_SIZE, pageNo * PAGE_SIZE);
 	if (pageNo > 1 && !slice.length) return c.notFound();
 	// Filtered/sorted variants of a listing are not separate pages for search engines.
-	const isBase = new URL(c.req.url).search === "" || (pageNo > 1 && [...new URL(c.req.url).searchParams.keys()].every((k) => k === "trang"));
+	const url = new URL(c.req.url);
+	const isBase = url.search === "" || (pageNo > 1 && [...url.searchParams.keys()].every((k) => k === listingParams[lang].page));
+	const at = (l: Lang) => `${opts.paths[l]}${pageNo > 1 && isBase ? `?${listingParams[l].page}=${pageNo}` : ""}`;
 	return page(
 		c,
 		{
-			title: titled(pageNo > 1 ? `${opts.title} – Trang ${pageNo}` : opts.title),
+			title: titled(pageNo > 1 ? `${opts.title}${t.meta.page(pageNo)}` : opts.title),
 			description: opts.intro,
-			canonical: opts.noindex ? undefined : pageNo > 1 && isBase ? `${opts.basePath}?trang=${pageNo}` : opts.basePath,
+			canonical: opts.noindex ? undefined : at(lang),
+			alternates: { vi: at("vi"), en: at("en") },
 			noindex: opts.noindex,
-			jsonLd: [breadcrumbJsonLd(s, opts.crumbs.map((x) => ({ name: x.name, path: x.href ?? opts.basePath }))), itemListJsonLd(s, slice)],
+			jsonLd: [breadcrumbJsonLd(s, opts.crumbs.map((x) => ({ name: x.name, path: x.href ?? basePath }))), itemListJsonLd(s, slice, lang)],
 			preload: slice[0]?.images[0],
 		},
-		<ListingPage ctx={viewCtx(c, filters.q)} title={opts.title} intro={opts.intro} products={slice} total={all.length} page={pageNo} filters={filters} basePath={opts.basePath} crumbs={opts.crumbs} />,
-		{ query: filters.q, cache: opts.noindex ? "public, max-age=60" : undefined },
+		<ListingPage
+			ctx={viewCtx(c, filters.q)}
+			title={opts.title}
+			intro={opts.intro}
+			products={slice.map((p) => localizeProduct(p, lang))}
+			total={all.length}
+			page={pageNo}
+			filters={filters}
+			basePath={basePath}
+			scope={opts.scope}
+			crumbs={opts.crumbs}
+		/>,
+		{ query: filters.q, cache: opts.noindex ? "public, max-age=60" : undefined, alt: `${opts.paths[otherLang(lang)]}${otherQuery(c)}` },
 	);
 }
 
-app.get("/san-pham", edgeCache, (c) =>
-	listing(c, {
-		title: "Tất cả sản phẩm",
-		intro: "Mô hình chibi, figure 20cm, móc khoá và standee anime – hàng có sẵn, giao toàn quốc.",
-		basePath: "/san-pham",
-		crumbs: [{ name: "Trang chủ", href: "/" }, { name: "Sản phẩm" }],
-	}),
-);
+for (const lang of LANGS) {
+	const r = routes[lang];
+	const t = text[lang];
+	const other = otherLang(lang);
 
-app.get("/bo-suu-tap/:slug", edgeCache, (c) => {
-	const slug = c.req.param("slug") ?? "";
-	const col = collections[slug];
-	if (!col) return c.notFound();
-	return listing(c, {
-		title: `Mô hình ${col.name}`,
-		intro: col.blurb,
-		basePath: collectionPath(slug),
-		base: { collection: slug },
-		crumbs: [{ name: "Trang chủ", href: "/" }, { name: "Sản phẩm", href: "/san-pham" }, { name: col.name }],
+	app.get(r.home, edgeCache, async (c) => {
+		const products = (await loadCatalog(c.env.DB)).map((p) => localizeProduct(p, lang));
+		return page(
+			c,
+			{ title: t.meta.homeTitle(site.name), description: t.meta.homeDescription, canonical: r.home, alternates: inAll("home"), jsonLd: storeJsonLd(c.get("s"), lang) },
+			<HomePage ctx={viewCtx(c)} products={products} />,
+		);
 	});
-});
 
-app.get("/danh-muc/:slug", edgeCache, (c) => {
-	const slug = c.req.param("slug") ?? "";
-	const cat = categories[slug];
-	if (!cat) return c.notFound();
-	return listing(c, {
-		title: cat.name,
-		intro: cat.blurb,
-		basePath: categoryPath(slug),
-		base: { category: slug },
-		crumbs: [{ name: "Trang chủ", href: "/" }, { name: "Sản phẩm", href: "/san-pham" }, { name: cat.name }],
-	});
-});
-
-app.get("/tim-kiem", edgeCache, async (c) => {
-	const q = c.req.query("q")?.trim();
-	if (!q) return c.redirect("/san-pham", 302);
-	return listing(c, {
-		title: `Kết quả cho “${q.slice(0, 60)}”`,
-		basePath: "/tim-kiem",
-		crumbs: [{ name: "Trang chủ", href: "/" }, { name: "Tìm kiếm" }],
-		noindex: true,
-	});
-});
-
-app.get("/san-pham/:slug", edgeCache, async (c) => {
-	const s = c.get("s");
-	const products = await loadCatalog(c.env.DB);
-	const product = products.find((p) => p.slug === (c.req.param("slug") ?? "") && p.status === "active");
-	if (!product || !product.skus.length) return c.notFound();
-	const selected = c.req.query("sku");
-	return page(
-		c,
-		{
-			title: titled(product.title),
-			description: metaDescription(product),
-			canonical: productPath(product),
-			image: product.images[0],
-			ogType: "product",
-			preload: product.images[0],
-			jsonLd: [
-				productJsonLd(s, product),
-				breadcrumbJsonLd(s, [
-					{ name: "Trang chủ", path: "/" },
-					{ name: collectionName(product.collection), path: collectionPath(product.collection) },
-					{ name: product.title, path: productPath(product) },
-				]),
-			],
-		},
-		<ProductPage ctx={viewCtx(c)} product={product} related={relatedProducts(product, products, videoById, 8)} selectedSkuId={selected} />,
+	app.get(r.products, edgeCache, (c) =>
+		listing(c, lang, {
+			title: t.allProducts,
+			intro: t.meta.productsIntro,
+			paths: inAll("products"),
+			scope: "all",
+			crumbs: [{ name: t.home, href: r.home }, { name: t.products }],
+		}),
 	);
-});
 
-app.get("/video", edgeCache, async (c) =>
-	page(
-		c,
-		{ title: titled("Video TikTok"), description: "Video mở hộp, decor mô hình anime từ TikTok @leduyenminh.", canonical: "/video" },
-		<VideosPage ctx={viewCtx(c)} products={await loadCatalog(c.env.DB)} />,
-	),
-);
+	app.get(`${r.collection}/:slug`, edgeCache, (c) => {
+		const slug = c.req.param("slug") ?? "";
+		const col = collections[slug];
+		if (!col) return c.notFound();
+		const name = groupText(col, lang).name;
+		return listing(c, lang, {
+			title: t.meta.collectionTitle(name),
+			intro: groupText(col, lang).blurb,
+			paths: { vi: collectionPath(slug, "vi"), en: collectionPath(slug, "en") },
+			scope: "collection",
+			base: { collection: slug },
+			crumbs: [{ name: t.home, href: r.home }, { name: t.products, href: r.products }, { name }],
+		});
+	});
 
-app.get("/ho-tro", edgeCache, (c) =>
-	page(
-		c,
-		{ title: titled("Câu hỏi thường gặp"), description: "Giao hàng, thanh toán COD, chuyển khoản VietQR, đổi trả tại Mall of Anitoy.", canonical: "/ho-tro", jsonLd: [faqJsonLd(faq(c.get("s")))] },
-		<HelpPage ctx={viewCtx(c)} />,
-	),
-);
+	app.get(`${r.category}/:slug`, edgeCache, (c) => {
+		const slug = c.req.param("slug") ?? "";
+		const cat = categories[slug];
+		if (!cat) return c.notFound();
+		const name = groupText(cat, lang).name;
+		return listing(c, lang, {
+			title: name,
+			intro: groupText(cat, lang).blurb,
+			paths: { vi: categoryPath(slug, "vi"), en: categoryPath(slug, "en") },
+			scope: "category",
+			base: { category: slug },
+			crumbs: [{ name: t.home, href: r.home }, { name: t.products, href: r.products }, { name }],
+		});
+	});
 
-app.get("/chinh-sach", edgeCache, (c) =>
-	page(c, { title: titled("Chính sách mua hàng"), description: "Chính sách giao hàng, đổi trả, thanh toán và bảo mật.", canonical: "/chinh-sach" }, <PolicyPage ctx={viewCtx(c)} />),
-);
+	app.get(r.search, edgeCache, async (c) => {
+		const q = c.req.query("q")?.trim();
+		if (!q) return c.redirect(r.products, 302);
+		return listing(c, lang, {
+			title: t.meta.searchTitle(q.slice(0, 60)),
+			paths: inAll("search"),
+			scope: "search",
+			crumbs: [{ name: t.home, href: r.home }, { name: t.search }],
+			noindex: true,
+		});
+	});
 
-app.get("/gioi-thieu", edgeCache, async (c) =>
-	page(
-		c,
-		{ title: titled("Giới thiệu"), description: `Về ${site.name} – shop mô hình anime của TikTok @${site.tiktok.handle}.`, canonical: "/gioi-thieu" },
-		<AboutPage ctx={viewCtx(c)} products={await loadCatalog(c.env.DB)} />,
-	),
-);
+	app.get(`${r.product}/:slug`, edgeCache, async (c) => {
+		const s = c.get("s");
+		const slug = c.req.param("slug") ?? "";
+		const products = await loadCatalog(c.env.DB);
+		const live = products.filter((p) => p.status === "active" && p.skus.length);
+		const product = live.find((p) => (lang === "en" ? englishSlug(p) : p.slug) === slug);
+		if (!product) {
+			// An English link built with the Vietnamese slug: send it to the English slug.
+			const moved = lang === "en" ? live.find((p) => p.slug === slug) : undefined;
+			return moved ? c.redirect(`${productPath(moved, lang)}${new URL(c.req.url).search}`, 301) : c.notFound();
+		}
+		const selected = c.req.query("sku");
+		const shown = localizeProduct(product, lang);
+		const paths = { vi: productPath(product, "vi"), en: productPath(product, "en") };
+		return page(
+			c,
+			{
+				title: titled(shown.title),
+				description: metaDescription(product, lang),
+				canonical: paths[lang],
+				alternates: paths,
+				image: product.images[0],
+				ogType: "product",
+				preload: product.images[0],
+				jsonLd: [
+					productJsonLd(s, product, lang),
+					breadcrumbJsonLd(s, [
+						{ name: t.home, path: r.home },
+						{ name: collectionName(product.collection, lang), path: collectionPath(product.collection, lang) },
+						{ name: shown.title, path: paths[lang] },
+					]),
+				],
+			},
+			<ProductPage
+				ctx={viewCtx(c)}
+				product={shown}
+				related={relatedProducts(product, products, videoById, 8).map((p) => localizeProduct(p, lang))}
+				selectedSkuId={selected}
+				untranslated={lang !== "vi" && !englishText(product)}
+			/>,
+			{ alt: `${paths[other]}${selected ? `?sku=${encodeURIComponent(selected)}` : ""}` },
+		);
+	});
 
-app.get("/tra-cuu-don-hang", edgeCache, (c) =>
-	page(c, { title: titled("Tra cứu đơn hàng"), description: "Tra cứu trạng thái đơn hàng bằng mã đơn và số điện thoại.", canonical: "/tra-cuu-don-hang" }, <LookupPage ctx={viewCtx(c)} />),
-);
+	app.get(r.videos, edgeCache, async (c) =>
+		page(
+			c,
+			{ title: titled(t.tiktokVideos), description: t.meta.videosDescription, canonical: r.videos, alternates: inAll("videos") },
+			<VideosPage ctx={viewCtx(c)} products={(await loadCatalog(c.env.DB)).map((p) => localizeProduct(p, lang))} />,
+		),
+	);
 
-app.get("/gio-hang", (c) => page(c, { title: titled("Giỏ hàng"), noindex: true }, <CartPage ctx={viewCtx(c)} />));
-app.get("/thanh-toan", async (c) => {
+	app.get(r.help, edgeCache, (c) =>
+		page(
+			c,
+			{ title: titled(t.faqTitle), description: t.meta.helpDescription, canonical: r.help, alternates: inAll("help"), jsonLd: [faqJsonLd(faq(c.get("s"), lang))] },
+			<HelpPage ctx={viewCtx(c)} />,
+		),
+	);
+
+	app.get(r.policy, edgeCache, (c) =>
+		page(c, { title: titled(t.policiesTitle), description: t.meta.policiesDescription, canonical: r.policy, alternates: inAll("policy") }, <PolicyPage ctx={viewCtx(c)} />),
+	);
+
+	app.get(r.about, edgeCache, async (c) =>
+		page(
+			c,
+			{ title: titled(t.about), description: t.meta.aboutDescription(site.name, site.tiktok.handle), canonical: r.about, alternates: inAll("about") },
+			<AboutPage ctx={viewCtx(c)} products={await loadCatalog(c.env.DB)} />,
+		),
+	);
+
+	app.get(r.lookup, edgeCache, (c) =>
+		page(c, { title: titled(t.meta.lookupTitle), description: t.meta.lookupDescription, canonical: r.lookup, alternates: inAll("lookup") }, <LookupPage ctx={viewCtx(c)} />),
+	);
+
+}
+
+// Private pages: no-store, noindex and never edge-cached. Registered with literal paths (not through
+// `routes`) so the edgeCache guard in .claude/hooks can see them.
+
+const cartPage = (lang: Lang) => (c: C) => page(c, { title: titled(text[lang].cart), noindex: true, alternates: inAll("cart") }, <CartPage ctx={viewCtx(c)} />);
+
+const checkoutPage = (lang: Lang) => async (c: C) => {
 	// Inside HCM GHN prices by ward, so checkout offers GHN's ward names (cached a day per isolate).
 	const ghn = c.get("s").shipping.ghn;
 	const hcmWards = ghn
@@ -322,50 +396,77 @@ app.get("/thanh-toan", async (c) => {
 				() => null,
 			)
 		: null;
-	return page(c, { title: titled("Thanh toán"), noindex: true }, <CheckoutPage ctx={viewCtx(c)} hcmWards={hcmWards} />);
-});
+	return page(c, { title: titled(text[lang].checkout), noindex: true, alternates: inAll("checkout") }, <CheckoutPage ctx={viewCtx(c)} hcmWards={hcmWards} />);
+};
 
-app.get("/don-hang/:id", async (c) => {
-	const order = await getOrderForViewer(c.env.DB, c.req.param("id"), c.req.query("t"));
-	if (!order) return page(c, { title: titled("Không tìm thấy đơn hàng"), noindex: true }, <NotFoundPage ctx={viewCtx(c)} />, { status: 404 });
+const orderPage = (lang: Lang) => async (c: C) => {
+	const t = text[lang];
+	const token = c.req.query("t");
+	const order = await getOrderForViewer(c.env.DB, c.req.param("id") ?? "", token);
+	if (!order) return page(c, { title: titled(t.meta.orderNotFound), noindex: true }, <NotFoundPage ctx={viewCtx(c)} />, { status: 404 });
 	const notice = c.req.query("moi") === "1" ? "new" : undefined;
-	return page(c, { title: titled(`Đơn hàng ${order.id}`), noindex: true }, <OrderPage ctx={viewCtx(c)} order={order} notice={notice} />);
-});
+	const lines = lang === "vi" ? order.lines : localizeLines(order.lines, await loadCatalog(c.env.DB), lang);
+	// The same order in the other language: the link carries the access token this page was opened with.
+	const alt = `${routes[otherLang(lang)].order}/${encodeURIComponent(order.id)}?t=${encodeURIComponent(token ?? "")}`;
+	return page(c, { title: titled(t.meta.orderTitle(order.id)), noindex: true }, <OrderPage ctx={viewCtx(c)} order={order} lines={lines} notice={notice} />, { alt });
+};
+
+app.get("/gio-hang", cartPage("vi"));
+app.get("/en/cart", cartPage("en"));
+app.get("/thanh-toan", checkoutPage("vi"));
+app.get("/en/checkout", checkoutPage("en"));
+app.get("/don-hang/:id", orderPage("vi"));
+app.get("/en/orders/:id", orderPage("en"));
 
 // ------------------------------------------------------------------ SEO files
 
 app.get("/robots.txt", (c) => {
 	const s = c.get("s");
+	const privatePaths = LANGS.flatMap((l) => [routes[l].cart, routes[l].checkout, `${routes[l].order}/`, routes[l].search]);
 	return c.text(
-		["User-agent: *", "Allow: /", "Disallow: /admin", "Disallow: /api/", "Disallow: /gio-hang", "Disallow: /thanh-toan", "Disallow: /don-hang/", "Disallow: /tim-kiem", "", `Sitemap: ${s.siteUrl}/sitemap.xml`, ""].join("\n"),
+		[
+			"User-agent: *",
+			"Allow: /",
+			"Disallow: /admin",
+			"Disallow: /api/",
+			...privatePaths.map((p) => `Disallow: ${p}`),
+			"",
+			`Sitemap: ${s.siteUrl}/sitemap.xml`,
+			`Sitemap: ${s.siteUrl}/sitemap-en.xml`,
+			"",
+		].join("\n"),
 		200,
 		{ "Cache-Control": "public, max-age=3600" },
 	);
 });
 
-app.get("/sitemap.xml", edgeCache, async (c) => {
-	const s = c.get("s");
+/** Every indexed page in `lang`, each with its alternates in every language. */
+async function sitemapFor(c: C, lang: Lang) {
 	const live = (await loadCatalog(c.env.DB)).filter((p) => p.status === "active");
 	const latest = live.map((p) => p.updatedAt).sort().at(-1);
-	const xml = sitemapXml(s, [
-		{ path: "/", lastmod: latest },
-		{ path: "/san-pham", lastmod: latest },
-		...Object.keys(collections).map((slug) => ({ path: collectionPath(slug), lastmod: latest })),
-		...Object.keys(categories).map((slug) => ({ path: categoryPath(slug), lastmod: latest })),
-		...live.map((p) => ({ path: productPath(p), lastmod: p.updatedAt, images: p.images })),
-		{ path: "/video" },
-		{ path: "/ho-tro" },
-		{ path: "/chinh-sach" },
-		{ path: "/gioi-thieu" },
-		{ path: "/tra-cuu-don-hang" },
+	const entry = (alternates: Record<Lang, string>, extra: Omit<SitemapEntry, "path" | "alternates"> = {}): SitemapEntry => ({ path: alternates[lang], alternates, ...extra });
+	const pages: PageKey[] = ["videos", "help", "policy", "about", "lookup"];
+	return sitemapXml(c.get("s"), [
+		entry(inAll("home"), { lastmod: latest }),
+		entry(inAll("products"), { lastmod: latest }),
+		...Object.keys(collections).map((slug) => entry({ vi: collectionPath(slug, "vi"), en: collectionPath(slug, "en") }, { lastmod: latest })),
+		...Object.keys(categories).map((slug) => entry({ vi: categoryPath(slug, "vi"), en: categoryPath(slug, "en") }, { lastmod: latest })),
+		...live.map((p) => entry({ vi: productPath(p, "vi"), en: productPath(p, "en") }, { lastmod: p.updatedAt, images: p.images })),
+		...pages.map((key) => entry(inAll(key))),
 	]);
-	return c.body(xml, 200, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": PUBLIC_PAGE });
-});
+}
 
-/** Google Merchant Center product feed (submit in Merchant Center → Products → Add from a file link). */
-app.get("/feeds/google.xml", edgeCache, async (c) =>
-	c.body(googleFeed(c.get("s"), await loadCatalog(c.env.DB)), 200, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": PUBLIC_PAGE }),
-);
+const xml = (c: C, body: string) => c.body(body, 200, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": PUBLIC_PAGE });
+
+app.get("/sitemap.xml", edgeCache, async (c) => xml(c, await sitemapFor(c, "vi")));
+app.get("/sitemap-en.xml", edgeCache, async (c) => xml(c, await sitemapFor(c, "en")));
+
+/**
+ * Google Merchant Center product feeds (Merchant Center → Products → Add from a file link): one in
+ * Vietnamese and one in English, both for Vietnam (the only country the shop ships to).
+ */
+app.get("/feeds/google.xml", edgeCache, async (c) => xml(c, googleFeed(c.get("s"), await loadCatalog(c.env.DB), "vi")));
+app.get("/feeds/google-en.xml", edgeCache, async (c) => xml(c, googleFeed(c.get("s"), await loadCatalog(c.env.DB), "en")));
 
 app.get("/manifest.webmanifest", (c) =>
 	c.json(
@@ -393,14 +494,17 @@ app.post("/api/cart/quote", async (c) => {
 	if (!(await allow(c.env.API_LIMITER, `quote:${clientIp(c.req.raw)}`))) return tooMany(c);
 	const parsed = quoteSchema.safeParse(await c.req.json().catch(() => null));
 	if (!parsed.success) return c.json({ error: "invalid" }, 400, noStore);
-	const { items, address } = parsed.data;
+	const { items, address, lang = "vi" } = parsed.data;
 	const shipping = c.get("s").shipping;
-	const quote = buildQuote(items, await loadProducts(c.env.DB, items.map((i) => i.productId)), shipping);
+	const products = await loadProducts(c.env.DB, items.map((i) => i.productId));
+	const quote = buildQuote(items, products, shipping);
+	// Product names in the page's language; amounts and issues are the server's quote as it is.
+	const shown = <Q extends Quote>(q: Q): Q => (lang === "vi" ? q : { ...q, lines: localizeLines(q.lines, products, lang) });
 	try {
-		return c.json(await priceShipping(quote, shipping, address), 200, noStore);
+		return c.json(shown(await priceShipping(quote, shipping, address)), 200, noStore);
 	} catch (error) {
 		// A ward GHN doesn't deliver to: no fee until the shopper picks one from the list.
-		if (error instanceof ShippingAddressError) return c.json({ ...quote, shippingFee: 0, total: quote.subtotal, shippingPending: true, addressIssue: "ward" }, 200, noStore);
+		if (error instanceof ShippingAddressError) return c.json({ ...shown(quote), shippingFee: 0, total: quote.subtotal, shippingPending: true, addressIssue: "ward" }, 200, noStore);
 		throw error;
 	}
 });
@@ -431,7 +535,10 @@ app.post("/api/orders/lookup", async (c) => {
 	const parsed = lookupSchema.safeParse(await c.req.json().catch(() => null));
 	const result = parsed.success ? await lookupOrder(c.env.DB, parsed.data.code, parsed.data.phone) : null;
 	// Same answer for a wrong code and a wrong phone.
-	return result ? c.json(result, 200, noStore) : c.json({ error: "not_found" }, 404, noStore);
+	if (!result) return c.json({ error: "not_found" }, 404, noStore);
+	// English product names on /en; the answer carries the same (masked) fields either way.
+	const lang = parsed.data?.lang ?? "vi";
+	return c.json(lang === "vi" ? result : { ...result, lines: localizeLines(result.lines, await loadCatalog(c.env.DB), lang) }, 200, noStore);
 });
 
 app.get("/api/orders/:id/status", async (c) => {
@@ -608,14 +715,15 @@ app.post("/api/admin/import", async (c) => {
 
 app.notFound((c) => {
 	if (new URL(c.req.url).pathname.startsWith("/api/")) return c.json({ error: "not_found" }, 404);
-	return page(c, { title: titled("Không tìm thấy trang"), noindex: true }, <NotFoundPage ctx={viewCtx(c)} />, { status: 404 });
+	return page(c, { title: titled(text[c.get("lang")].notFound), noindex: true }, <NotFoundPage ctx={viewCtx(c)} />, { status: 404 });
 });
 
 app.onError((error, c) => {
 	log.error("request.failed", { path: new URL(c.req.url).pathname, error: String(error) });
 	if (new URL(c.req.url).pathname.startsWith("/api/")) return c.json({ error: "server_error" }, 500, noStore);
 	if (!c.get("s")) c.set("s", settings(c.env, new URL(c.req.url).origin));
-	return page(c, { title: titled("Có lỗi xảy ra"), noindex: true }, <ErrorPage ctx={viewCtx(c)} />, { status: 500 });
+	if (!c.get("lang")) c.set("lang", langOf(new URL(c.req.url).pathname));
+	return page(c, { title: titled(text[c.get("lang")].error), noindex: true }, <ErrorPage ctx={viewCtx(c)} />, { status: 500 });
 });
 
 export default {

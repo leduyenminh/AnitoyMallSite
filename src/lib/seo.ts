@@ -1,17 +1,22 @@
 import { categoryName, collectionName, leadSku, productVideos } from "./catalog";
 import { site, type Settings } from "./config";
+import { type Lang, LANGS, locales, routes, X_DEFAULT } from "./i18n";
+import { formatVnd } from "./money";
 import { shippingFor } from "./quote";
+import { englishSlug, localizeProduct } from "./translations";
 import type { Product, Sku } from "./types";
 
-// Structured data (JSON-LD), the Google Merchant Center feed and the sitemap. The feed and the
+// Structured data (JSON-LD), the Google Merchant Center feeds and the sitemaps. The feed and the
 // product pages are built from the same facts (price, stock, shipping, returns) because Google
-// disapproves items whose feed and landing page disagree.
+// disapproves items whose feed and landing page disagree. English pages and the English feed carry
+// the same prices (VND), stock and shipping (Vietnam only) as the Vietnamese ones; only text and
+// links differ.
 
 export const absoluteUrl = (s: Settings, path: string) => (/^https?:\/\//i.test(path) ? path : `${s.siteUrl}${path.startsWith("/") ? "" : "/"}${path}`);
 
-export const productPath = (p: Pick<Product, "slug">) => `/san-pham/${p.slug}`;
-export const collectionPath = (slug: string) => `/bo-suu-tap/${slug}`;
-export const categoryPath = (slug: string) => `/danh-muc/${slug}`;
+export const productPath = (p: Pick<Product, "id" | "slug">, lang: Lang = "vi") => `${routes[lang].product}/${lang === "en" ? englishSlug(p) : p.slug}`;
+export const collectionPath = (slug: string, lang: Lang = "vi") => `${routes[lang].collection}/${slug}`;
+export const categoryPath = (slug: string, lang: Lang = "vi") => `${routes[lang].category}/${slug}`;
 
 /** Resized image through Cloudflare Images when enabled on the zone, else the original. */
 export function imageSrc(s: Settings, src: string, width: number): string {
@@ -28,8 +33,8 @@ const hasVariants = (p: Product) => p.skus.length > 1;
 /** Id shared by the feed item and the JSON-LD `sku`, so Google pairs them. */
 export const merchantItemId = (p: Product, sku: Sku) => (hasVariants(p) ? sku.id : p.id);
 
-function skuUrl(s: Settings, p: Product, sku?: Sku) {
-	const url = absoluteUrl(s, productPath(p));
+function skuUrl(s: Settings, p: Product, sku: Sku | undefined, lang: Lang) {
+	const url = absoluteUrl(s, productPath(p, lang));
 	return sku && hasVariants(p) ? `${url}?sku=${encodeURIComponent(sku.id)}` : url;
 }
 
@@ -37,11 +42,11 @@ function images(s: Settings, p: Product, sku?: Sku): string[] {
 	return [...new Set([...(sku?.image ? [sku.image] : []), ...p.images].map((src) => absoluteUrl(s, src)))];
 }
 
-function offer(s: Settings, p: Product, sku: Sku) {
+function offer(s: Settings, p: Product, sku: Sku, lang: Lang) {
 	const days = deliveryDays(s.shipping.eta);
 	return {
 		"@type": "Offer",
-		url: skuUrl(s, p, sku),
+		url: skuUrl(s, p, sku, lang),
 		price: sku.price,
 		priceCurrency: site.currency,
 		availability: sku.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
@@ -72,9 +77,11 @@ function offer(s: Settings, p: Product, sku: Sku) {
 	};
 }
 
-export function productJsonLd(s: Settings, p: Product) {
+/** Product / ProductGroup for the product page in `lang` (`source` is the product as stored). */
+export function productJsonLd(s: Settings, source: Product, lang: Lang = "vi") {
+	const p = localizeProduct(source, lang);
 	const brand = { "@type": "Brand", name: site.shortName };
-	const category = `${categoryName(p.category)} > ${collectionName(p.collection)}`;
+	const category = `${categoryName(p.category, lang)} > ${collectionName(p.collection, lang)}`;
 	const videos = productVideos(p)
 		.slice(0, 3)
 		.map((v) => ({
@@ -93,12 +100,12 @@ export function productJsonLd(s: Settings, p: Product) {
 		image: images(s, p),
 		brand,
 		category,
-		url: absoluteUrl(s, productPath(p)),
+		url: absoluteUrl(s, productPath(p, lang)),
 		...(videos.length ? { subjectOf: videos } : {}),
 	};
 	if (!hasVariants(p)) {
 		const sku = p.skus[0]!;
-		return { ...base, "@type": "Product", sku: merchantItemId(p, sku), offers: offer(s, p, sku) };
+		return { ...base, "@type": "Product", sku: merchantItemId(p, sku), offers: offer(s, p, sku, lang) };
 	}
 	return {
 		...base,
@@ -111,7 +118,7 @@ export function productJsonLd(s: Settings, p: Product) {
 			sku: merchantItemId(p, sku),
 			pattern: sku.name,
 			image: images(s, p, sku)[0],
-			offers: offer(s, p, sku),
+			offers: offer(s, p, sku, lang),
 		})),
 	};
 }
@@ -124,7 +131,8 @@ export function breadcrumbJsonLd(s: Settings, items: { name: string; path: strin
 	};
 }
 
-export function storeJsonLd(s: Settings) {
+export function storeJsonLd(s: Settings, lang: Lang = "vi") {
+	const home = lang === "vi" ? `${s.siteUrl}/` : absoluteUrl(s, routes[lang].home);
 	return [
 		{
 			"@context": "https://schema.org",
@@ -151,22 +159,22 @@ export function storeJsonLd(s: Settings) {
 			"@context": "https://schema.org",
 			"@type": "WebSite",
 			name: site.name,
-			url: `${s.siteUrl}/`,
-			inLanguage: "vi-VN",
+			url: home,
+			inLanguage: lang === "vi" ? "vi-VN" : locales[lang].html,
 			potentialAction: {
 				"@type": "SearchAction",
-				target: { "@type": "EntryPoint", urlTemplate: `${s.siteUrl}/tim-kiem?q={search_term_string}` },
+				target: { "@type": "EntryPoint", urlTemplate: `${absoluteUrl(s, routes[lang].search)}?q={search_term_string}` },
 				"query-input": "required name=search_term_string",
 			},
 		},
 	];
 }
 
-export function itemListJsonLd(s: Settings, products: Product[]) {
+export function itemListJsonLd(s: Settings, products: Product[], lang: Lang = "vi") {
 	return {
 		"@context": "https://schema.org",
 		"@type": "ItemList",
-		itemListElement: products.map((p, i) => ({ "@type": "ListItem", position: i + 1, url: absoluteUrl(s, productPath(p)) })),
+		itemListElement: products.map((p, i) => ({ "@type": "ListItem", position: i + 1, url: absoluteUrl(s, productPath(p, lang)) })),
 	};
 }
 
@@ -193,10 +201,15 @@ const truncate = (text: string, max: number) => {
 	return chars.length <= max ? text : `${chars.slice(0, max - 1).join("").trimEnd()}…`;
 };
 
-/** RSS 2.0 with the g: namespace. One item per SKU; variants share item_group_id. */
-export function googleFeed(s: Settings, products: Product[]): string {
+/**
+ * RSS 2.0 with the g: namespace. One item per SKU; variants share item_group_id. The English feed
+ * (`lang` "en") links to the English pages and still targets Vietnam: same ids, prices, stock and
+ * shipping as the Vietnamese feed.
+ */
+export function googleFeed(s: Settings, products: Product[], lang: Lang = "vi"): string {
 	const items = products
 		.filter((p) => p.status === "active")
+		.map((p) => localizeProduct(p, lang))
 		.flatMap((p) =>
 			p.skus
 				.filter((sku) => sku.price > 0)
@@ -210,7 +223,7 @@ export function googleFeed(s: Settings, products: Product[]): string {
 						["item_group_id", variant ? p.id : undefined],
 						["title", truncate(p.title, 150 - [...suffix].length) + suffix],
 						["description", truncate(p.description.trim() || p.title, 5000)],
-						["link", skuUrl(s, p, sku)],
+						["link", skuUrl(s, p, sku, lang)],
 						["image_link", imageLink],
 						...more.slice(0, 10).map((src): [string, string] => ["additional_image_link", src]),
 						["availability", sku.stock > 0 ? "in_stock" : "out_of_stock"],
@@ -220,7 +233,7 @@ export function googleFeed(s: Settings, products: Product[]): string {
 						["identifier_exists", "no"],
 						["pattern", variant],
 						["google_product_category", "Toys & Games > Toys > Dolls, Playsets & Toy Figures > Action & Toy Figures"],
-						["product_type", `${categoryName(p.category)} > ${collectionName(p.collection)}`],
+						["product_type", `${categoryName(p.category, lang)} > ${collectionName(p.collection, lang)}`],
 					];
 					const lines = fields.filter(([, v]) => v !== undefined).map(([k, v]) => `  <g:${k}>${escapeXml(v!)}</g:${k}>`);
 					const shipping = `  <g:shipping><g:country>${site.country}</g:country><g:price>${shippingFor(sku.price, s.shipping)} ${site.currency}</g:price></g:shipping>`;
@@ -233,8 +246,8 @@ export function googleFeed(s: Settings, products: Product[]): string {
 		'<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">',
 		"<channel>",
 		`<title>${escapeXml(site.name)}</title>`,
-		`<link>${escapeXml(`${s.siteUrl}/`)}</link>`,
-		`<description>${escapeXml(site.tagline)}</description>`,
+		`<link>${escapeXml(lang === "vi" ? `${s.siteUrl}/` : absoluteUrl(s, routes[lang].home))}</link>`,
+		`<description>${escapeXml(lang === "vi" ? site.tagline : site.taglineEn)}</description>`,
 		...items,
 		"</channel>",
 		"</rss>",
@@ -244,19 +257,29 @@ export function googleFeed(s: Settings, products: Product[]): string {
 
 // ------------------------------------------------------------------ sitemap
 
-export function sitemapXml(s: Settings, entries: { path: string; lastmod?: string; images?: string[] }[]): string {
+export interface SitemapEntry {
+	path: string;
+	lastmod?: string;
+	images?: string[];
+	/** The page in every language (including this one), listed as hreflang alternates. */
+	alternates?: Record<Lang, string>;
+}
+
+export function sitemapXml(s: Settings, entries: SitemapEntry[]): string {
+	const link = (hreflang: string, path: string) => `  <xhtml:link rel="alternate" hreflang="${hreflang}" href="${escapeXml(absoluteUrl(s, path))}"/>`;
 	const urls = entries.map((e) =>
 		[
 			"<url>",
 			`  <loc>${escapeXml(absoluteUrl(s, e.path))}</loc>`,
 			...(e.lastmod ? [`  <lastmod>${e.lastmod.slice(0, 10)}</lastmod>`] : []),
+			...(e.alternates ? [...LANGS.map((l) => link(locales[l].html, e.alternates![l])), link("x-default", e.alternates[X_DEFAULT])] : []),
 			...(e.images ?? []).slice(0, 10).map((src) => `  <image:image><image:loc>${escapeXml(absoluteUrl(s, src))}</image:loc></image:image>`),
 			"</url>",
 		].join("\n"),
 	);
 	return [
 		'<?xml version="1.0" encoding="UTF-8"?>',
-		'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">',
+		'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1" xmlns:xhtml="http://www.w3.org/1999/xhtml">',
 		...urls,
 		"</urlset>",
 		"",
@@ -264,9 +287,10 @@ export function sitemapXml(s: Settings, entries: { path: string; lastmod?: strin
 }
 
 /** Meta description: the start of the plain-text description plus the price, ≤ ~160 chars. */
-export function metaDescription(p: Product): string {
+export function metaDescription(source: Product, lang: Lang = "vi"): string {
+	const p = localizeProduct(source, lang);
 	const sku = leadSku(p);
 	const text = p.description.replace(/\p{Extended_Pictographic}/gu, "").replace(/\s+/g, " ").trim();
-	const price = sku && sku.price > 0 ? ` Giá ${sku.price.toLocaleString("vi-VN")}₫.` : "";
+	const price = !sku || sku.price <= 0 ? "" : lang === "vi" ? ` Giá ${sku.price.toLocaleString("vi-VN")}₫.` : ` Price ${formatVnd(sku.price, lang)}.`;
 	return truncate(text || p.title, 158 - price.length) + price;
 }

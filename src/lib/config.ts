@@ -1,3 +1,4 @@
+import type { Lang } from "./i18n";
 import { type PricingRule, pricingRule } from "./pricing";
 import type { GhnConfig, Parcel, ShippingSettings } from "./shipping";
 import type { PaymentMethod } from "./types";
@@ -6,6 +7,7 @@ export const site = {
 	name: "Mall of Anitoy",
 	shortName: "Anitoy",
 	tagline: "Mô hình anime chibi decor bàn học, bàn làm việc",
+	taglineEn: "Anime chibi figures to decorate your study or work desk",
 	tiktok: {
 		handle: "leduyenminh",
 		profileUrl: "https://www.tiktok.com/@leduyenminh",
@@ -16,18 +18,56 @@ export const site = {
 	country: "VN",
 } as const;
 
-export const collections: Record<string, { name: string; blurb: string }> = {
-	frieren: { name: "Frieren", blurb: "Frieren, Fern, Stark và Himmel – mô hình chibi, figure 20cm và móc khoá Sousou no Frieren." },
-	neko: { name: "Neko Kawaii", blurb: "Osakana neko, Kinako – hội cô gái tai mèo My cat is a kawaii girl." },
-	kimetsu: { name: "Kimetsu no Yaiba", blurb: "Tanjirou, Nezuko, Zenitsu, Inosuke, Giyu và Shinobu." },
-	khac: { name: "Anime & Game", blurb: "Chainsaw Man, Honkai: Star Rail, Genshin Impact và nhiều hơn nữa." },
+/** A collection or category: Vietnamese name and blurb, and the English ones for /en. */
+export interface Group {
+	name: string;
+	blurb: string;
+	en: { name: string; blurb: string };
+}
+
+export const collections: Record<string, Group> = {
+	frieren: {
+		name: "Frieren",
+		blurb: "Frieren, Fern, Stark và Himmel – mô hình chibi, figure 20cm và móc khoá Sousou no Frieren.",
+		en: { name: "Frieren", blurb: "Frieren, Fern, Stark and Himmel – chibi figures, 20 cm figures and keychains from Frieren: Beyond Journey's End." },
+	},
+	neko: {
+		name: "Neko Kawaii",
+		blurb: "Osakana neko, Kinako – hội cô gái tai mèo My cat is a kawaii girl.",
+		en: { name: "Neko Kawaii", blurb: "Osakana neko and Kinako – the cat-eared girls of My Cat Is a Kawaii Girl." },
+	},
+	kimetsu: {
+		name: "Kimetsu no Yaiba",
+		blurb: "Tanjirou, Nezuko, Zenitsu, Inosuke, Giyu và Shinobu.",
+		en: { name: "Demon Slayer", blurb: "Demon Slayer: Kimetsu no Yaiba – Tanjirou, Nezuko, Zenitsu, Inosuke, Giyu and Shinobu." },
+	},
+	khac: {
+		name: "Anime & Game",
+		blurb: "Chainsaw Man, Honkai: Star Rail, Genshin Impact và nhiều hơn nữa.",
+		en: { name: "Anime & Game", blurb: "Chainsaw Man, Honkai: Star Rail, Genshin Impact and more." },
+	},
 };
 
-export const categories: Record<string, { name: string; blurb: string }> = {
-	mini: { name: "Mô hình mini", blurb: "Mô hình chibi 9–12cm, vừa xinh cho góc bàn học." },
-	figure: { name: "Figure 20cm", blurb: "Figure cỡ lớn 20cm, chi tiết sắc nét để trưng bày." },
-	accessory: { name: "Móc khoá & phụ kiện", blurb: "Móc khoá acrylic, standee, dây đeo điện thoại." },
+export const categories: Record<string, Group> = {
+	mini: {
+		name: "Mô hình mini",
+		blurb: "Mô hình chibi 9–12cm, vừa xinh cho góc bàn học.",
+		en: { name: "Mini figures", blurb: "9–12 cm chibi figures, just the right size for a desk corner." },
+	},
+	figure: {
+		name: "Figure 20cm",
+		blurb: "Figure cỡ lớn 20cm, chi tiết sắc nét để trưng bày.",
+		en: { name: "20 cm figures", blurb: "Large 20 cm figures with crisp detail, made for display." },
+	},
+	accessory: {
+		name: "Móc khoá & phụ kiện",
+		blurb: "Móc khoá acrylic, standee, dây đeo điện thoại.",
+		en: { name: "Keychains & accessories", blurb: "Acrylic keychains, standees and phone straps." },
+	},
 };
+
+/** A collection's or category's name and blurb in `lang`. */
+export const groupText = (g: Group, lang: Lang) => (lang === "en" ? g.en : g);
 
 const num = (value: string | undefined, fallback: number) => {
 	const n = Number(value);
@@ -139,7 +179,19 @@ export function enabledPaymentMethods(s: Settings): PaymentMethod[] {
 	return ["cod", ...(s.bank ? (["vietqr"] as const) : [])];
 }
 
-export const paymentLabels: Record<PaymentMethod, { title: string; hint: string }> = {
-	cod: { title: "Thanh toán khi nhận hàng (COD)", hint: "Trả tiền mặt cho shipper khi nhận hàng." },
-	vietqr: { title: "Chuyển khoản VietQR", hint: "Quét mã QR bằng app ngân hàng bất kỳ, tiền về thẳng tài khoản BIDV của shop." },
+export const paymentLabelsByLang: Record<Lang, Record<PaymentMethod, { title: string; hint: string }>> = {
+	vi: {
+		cod: { title: "Thanh toán khi nhận hàng (COD)", hint: "Trả tiền mặt cho shipper khi nhận hàng." },
+		vietqr: { title: "Chuyển khoản VietQR", hint: "Quét mã QR bằng app ngân hàng bất kỳ, tiền về thẳng tài khoản BIDV của shop." },
+	},
+	en: {
+		cod: { title: "Cash on delivery (COD)", hint: "Pay the courier in cash when your parcel arrives." },
+		vietqr: {
+			title: "VietQR bank transfer",
+			hint: "Scan the QR code with any Vietnamese banking app; the money goes straight into the shop's BIDV account.",
+		},
+	},
 };
+
+/** Vietnamese labels (admin and the Vietnamese storefront). */
+export const paymentLabels = paymentLabelsByLang.vi;

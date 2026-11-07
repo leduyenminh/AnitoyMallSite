@@ -98,7 +98,10 @@ const destination = z.object({
 	ward: z.string().trim().max(100),
 });
 
-export const quoteSchema = z.object({ items: z.array(cartItem).max(30), address: destination.optional() });
+/** Language of product names in a quote or lookup answer; amounts are the same in both. */
+const lang = z.enum(["vi", "en"]).optional();
+
+export const quoteSchema = z.object({ items: z.array(cartItem).max(30), address: destination.optional(), lang });
 
 /** The province of Ho Chi Minh City, where GHN delivers; elsewhere Viettel Post. */
 export const HCM_PROVINCE = "Thành phố Hồ Chí Minh" satisfies (typeof provinces)[number];
@@ -140,4 +143,5 @@ export const ghnCallbackSchema = z.object({
 export const lookupSchema = z.object({
 	code: z.string().trim().min(7).max(20),
 	phone: z.string().trim().min(9).max(20),
+	lang,
 });

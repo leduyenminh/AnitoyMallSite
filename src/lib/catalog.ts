@@ -1,5 +1,7 @@
 import videoFile from "../../data/videos.json";
-import { categories, collections } from "./config";
+import { categories, collections, groupText } from "./config";
+import type { Lang } from "./i18n";
+import { englishSearchText } from "./translations";
 import type { Product, Sku, Video } from "./types";
 
 // Pure catalog helpers: availability, search, filters, sorting and the shop's TikTok videos.
@@ -23,8 +25,8 @@ export function priceRange(p: Product): { min: number; max: number } {
 	return { min: Math.min(...prices), max: Math.max(...prices) };
 }
 
-export const collectionName = (slug: string) => collections[slug]?.name ?? slug;
-export const categoryName = (slug: string) => categories[slug]?.name ?? slug;
+export const collectionName = (slug: string, lang: Lang = "vi") => (collections[slug] ? groupText(collections[slug], lang).name : slug);
+export const categoryName = (slug: string, lang: Lang = "vi") => (categories[slug] ? groupText(categories[slug], lang).name : slug);
 
 /** Lower-case, no diacritics, đ → d: "Móc khoá" and "moc khoa" match. */
 export function fold(text: string): string {
@@ -36,8 +38,20 @@ export function fold(text: string): string {
 		.toLowerCase();
 }
 
+/** Vietnamese and English words, so a search finds a product in either language. */
 function haystack(p: Product): string {
-	return fold([p.title, p.tags.join(" "), collectionName(p.collection), categoryName(p.category), p.skus.map((s) => s.name).join(" ")].join(" "));
+	return fold(
+		[
+			p.title,
+			p.tags.join(" "),
+			collectionName(p.collection),
+			categoryName(p.category),
+			p.skus.map((s) => s.name).join(" "),
+			englishSearchText(p),
+			collectionName(p.collection, "en"),
+			categoryName(p.category, "en"),
+		].join(" "),
+	);
 }
 
 export function search(products: Product[], query: string): Product[] {
@@ -57,12 +71,21 @@ export function search(products: Product[], query: string): Product[] {
 
 export type SortKey = "featured" | "bestselling" | "price-asc" | "price-desc" | "newest";
 
-export const sortLabels: Record<SortKey, string> = {
-	featured: "Nổi bật",
-	bestselling: "Bán chạy",
-	newest: "Mới nhất",
-	"price-asc": "Giá thấp → cao",
-	"price-desc": "Giá cao → thấp",
+export const sortLabels: Record<Lang, Record<SortKey, string>> = {
+	vi: {
+		featured: "Nổi bật",
+		bestselling: "Bán chạy",
+		newest: "Mới nhất",
+		"price-asc": "Giá thấp → cao",
+		"price-desc": "Giá cao → thấp",
+	},
+	en: {
+		featured: "Featured",
+		bestselling: "Best selling",
+		newest: "Newest",
+		"price-asc": "Price: low → high",
+		"price-desc": "Price: high → low",
+	},
 };
 
 export function sortProducts(products: Product[], sort: SortKey, videos: Map<string, Video>): Product[] {

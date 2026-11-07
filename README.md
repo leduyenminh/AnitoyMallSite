@@ -7,7 +7,8 @@ Online shop for the TikTok seller **[Mall of Anitoy (@leduyenminh)](https://www.
 - **Payments**: cash on delivery (COD) and **VietQR** bank transfer straight into the shop's **BIDV** account, with optional automatic confirmation through SePay. No wallets, cards or payment gateways: no money passes through a third party.
 - **Three themes**: Light, Dark and **Windows 95** (bevelled windows, title bars, taskbar with Start menu and clock). Follows the system light/dark by default; the choice is remembered and applied before first paint.
 - **E-commerce UX** in the style of Thế Giới Di Động / Shopee: big search, category bar, category tiles, best-seller rail, free-shipping meter, quick add, cart drawer, sticky mobile buy bar, bottom navigation on phones, guest checkout with the 34 provinces in force since 1 July 2025, order tracking and "Tra cứu đơn hàng".
-- **SEO**: server-rendered HTML, clean Vietnamese URLs, canonical links, Open Graph, JSON-LD (OnlineStore, WebSite + SearchAction, Product / ProductGroup with offers, shipping and return policy, BreadcrumbList, ItemList, FAQPage, VideoObject), `sitemap.xml` with images, `robots.txt`, and a **Google Merchant Center feed**.
+- **Vietnamese and English**: Vietnamese at `/`, English under `/en` (`/en/products`, `/en/checkout`, `/en/orders/…`) with a language switch in the header. English product text is in `data/translations.en.json` (see below). Prices stay in VND and delivery stays inside Vietnam in both.
+- **SEO**: server-rendered HTML, clean Vietnamese and English URLs, canonical links, `hreflang` alternates (vi, en, x-default → English), Open Graph, JSON-LD (OnlineStore, WebSite + SearchAction, Product / ProductGroup with offers, shipping and return policy, BreadcrumbList, ItemList, FAQPage, VideoObject), `sitemap.xml` with images, `robots.txt`, and a **Google Merchant Center feed**.
 - **Spam protection**: rate limits on the order, lookup and status APIs, per-phone and per-IP order caps, a honeypot field, optional Cloudflare Turnstile, and **unconfirmed orders expire** so they stop holding stock.
 
 Colour scheme: jade green + saffron, deliberately unlike TikTok's black, pink and cyan.
@@ -156,13 +157,21 @@ Deploy, then in `/admin → Sản phẩm` click **Cập nhật nội dung** (kee
 
 ## Google Merchant Center and SEO
 
-1. Verify the domain in [Google Search Console](https://search.google.com/search-console) and submit `https://anitoymall.com/sitemap.xml`.
+1. Verify the domain in [Google Search Console](https://search.google.com/search-console) and submit `https://anitoymall.com/sitemap.xml` and `https://anitoymall.com/sitemap-en.xml` (both are also listed in `robots.txt`). Every URL in them names its Vietnamese and English versions as `hreflang` alternates.
 2. In [Merchant Center](https://merchants.google.com) (country Vietnam), verify and claim the website.
 3. Set **shipping** to match the site (Vietnam, VND, 30.000đ flat, free from 150.000đ, 2–5 days) and the **return policy** to match `RETURN_DAYS` (0 = no returns except damaged items).
-4. **Products → Add products → Add from a file → file link**: `https://anitoymall.com/feeds/google.xml`, language Vietnamese, currency VND, daily fetch.
+4. **Products → Add products → Add from a file → file link**: `https://anitoymall.com/feeds/google.xml`, language Vietnamese, currency VND, daily fetch. Add a second file link, `https://anitoymall.com/feeds/google-en.xml`, language **English**, country **Vietnam**, currency VND: same items, prices, stock and shipping, with English titles and links to the `/en` pages.
 5. Turn on free listings and automatic item updates. Check **Needs attention** after the first fetch.
 
-The feed has one item per SKU (variants share `item_group_id`), with real stock (`in_stock` / `out_of_stock`), images and shipping. Product pages carry matching `Product` / `ProductGroup` JSON-LD.
+The feeds have one item per SKU (variants share `item_group_id`), with real stock (`in_stock` / `out_of_stock`), images and shipping. Product pages carry matching `Product` / `ProductGroup` JSON-LD. Both feeds target Vietnam only, because the shop ships only inside Vietnam; targeting other countries would need international shipping first.
+
+## English version
+
+Every storefront page has an English twin under `/en`; `/admin`, the APIs and webhooks are shared. Pages link each other with `hreflang`, and `x-default` points to English for searchers in other languages. A visitor whose browser isn't set to Vietnamese sees a one-time hint linking to the English page. Checkout in English places exactly the same order (same validation, Vietnamese province names, COD or VietQR), and the order page opens under `/en/orders/…`.
+
+**Product text.** `data/translations.en.json` holds each product's English slug, title and description, plus glossaries for SKU names and specifications. An English title and description are shown only while `source` matches the current Vietnamese title and description; after `npm run import` changes them, the English page falls back to Vietnamese and `npm run check` names the product and its new `source` value. Re-check the English text, then update `source`. TikTok video captions stay in Vietnamese.
+
+**Not included.** Shipping outside Vietnam and paying from abroad: checkout needs a Vietnamese address and mobile number, and VietQR needs a Vietnamese banking app. International orders would need a carrier that ships abroad, foreign payment and prices in another currency, which are decisions for the shop owner first.
 
 ## Working on the code with Claude Code
 
@@ -172,11 +181,14 @@ The feed has one item per SKU (variants share `item_group_id`), with real stock 
 
 ```
 cloudflare.config.ts     Worker, D1, rate limiters, cron, public settings
-data/                    listings.json (TikTok Shop ids + merchandising), videos.json
+data/                    listings.json (TikTok Shop ids + merchandising), videos.json,
+                         translations.en.json (English product text)
 scripts/import-tiktok.mjs  clones listings and photos from TikTok Shop
 public/                  assets (CSS, JS), media (product photos, video covers), _headers
 src/index.tsx            routes, edge cache, security headers, admin auth, payment callbacks, cron
 src/lib/                 db (D1), orders, quote, payments (VietQR payload, SePay bank webhook),
-                         limits, seo (JSON-LD, feed, sitemap), catalog, config, validation
-src/views/               layout, components, pages (home, listing, product, checkout, order, info, admin)
+                         limits, seo (JSON-LD, feeds, sitemaps), catalog, config, validation,
+                         i18n (languages and paths), translations (English product text)
+src/views/               layout, components, text (vi/en strings), pages (home, listing, product,
+                         checkout, order, info, admin)
 ```
