@@ -47,22 +47,26 @@ export default defineConfig(({ mode, isPreview }) => {
 				PRICE_ROUNDING: bindings.text("1000"),
 
 				// Shipping and returns, as shown on product pages and sent to Google Merchant Center.
-				SHIPPING_FEE: bindings.text("30000"),
 				FREE_SHIPPING_THRESHOLD: bindings.text("150000"),
 				DELIVERY_ETA: bindings.text("2–5"),
+				// Shipping fees from GHN's rate card (10/11/2026, light goods up to 5 kg, VAT included),
+				// as "grams:đồng" bands: one price inside Ho Chi Minh City up to 3 kg, by weight to other
+				// provinces, and SHIPPING_FEE_PER_EXTRA_KG for each started kg past a zone's last band.
+				// The weight is what GHN bills: the larger of the real weight and L × W × H / 5000.
+				SHIPPING_RATES_HCM: bindings.text("3000:16500"),
+				SHIPPING_RATES_OTHER: bindings.text("500:26000,1000:28000,2000:30000,3000:33000,4000:37000,5000:42000"),
+				SHIPPING_FEE_PER_EXTRA_KG: bindings.text("7000"),
 				// Packed size of one item (every item weighs under 200 g; TikTok bills the box at
 				// 333 g, i.e. 2,000 cm³). An order's items stack: weights add up, heights stack.
 				PARCEL_WEIGHT_G: bindings.text("200"),
 				PARCEL_SIZE_CM: bindings.text("20x10x10"),
 
-				// GHN prices delivery inside Ho Chi Minh City (src/lib/shipping.ts). It turns on once
-				// the GHN_TOKEN secret, the shop id (khachhang.ghn.vn → shop list) and the shop's phone
-				// are set; until then, and outside HCM until Viettel Post is connected, the flat
-				// SHIPPING_FEE applies. The phone is the recipient of fee previews: no order is created
-				// and no customer data is sent. GHN's staging API is https://dev-online-gateway.ghn.vn.
+				// GHN's API books parcels for HCM orders from /admin and reports their status
+				// (src/lib/shipping.ts). It turns on once the GHN_TOKEN secret and the shop id
+				// (khachhang.ghn.vn → shop list) are set. GHN's staging API is
+				// https://dev-online-gateway.ghn.vn.
 				GHN_API_URL: bindings.text("https://online-gateway.ghn.vn"),
 				GHN_SHOP_ID: bindings.text("6764257"),
-				SHIP_FROM_PHONE: bindings.text("0368093125"),
 				RETURN_DAYS: bindings.text("0"),
 
 				// VietQR transfers go straight to this BIDV account (BIN 970418). Shown to paying

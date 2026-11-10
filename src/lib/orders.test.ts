@@ -65,8 +65,8 @@ describe("placing orders", () => {
 		const db = await freshDb();
 		const order = await place(db, { items: [{ productId: "test-p", skuId: "test-s", quantity: 1 }] });
 		expect(order.subtotal).toBe(PRICE);
-		expect(order.shippingFee).toBe(s.shipping.fee);
-		expect(order.total).toBe(PRICE + s.shipping.fee);
+		expect(order.shippingFee).toBe(26000); // GHN's rate card: one item (billed 0.4 kg) to Hà Nội
+		expect(order.total).toBe(PRICE + 26000);
 		expect(await stockOf(db)).toBe(1);
 		expect(order.expiresAt).toBe(new Date(NOW.getTime() + s.ttl.cod * 60_000).toISOString());
 	});
@@ -220,7 +220,7 @@ describe("payments", () => {
 });
 
 describe("shipping on orders", () => {
-	const ghnSettings = settings({ BANK_ACCOUNT_NO: "1234567890", BANK_ACCOUNT_NAME: "NGUYEN VAN A", GHN_TOKEN: "test-token", GHN_SHOP_ID: "123", SHIP_FROM_PHONE: "0900000000" } as unknown as Env);
+	const ghnSettings = settings({ BANK_ACCOUNT_NO: "1234567890", BANK_ACCOUNT_NAME: "NGUYEN VAN A", GHN_TOKEN: "test-token", GHN_SHOP_ID: "123" } as unknown as Env);
 	const bookings: Record<string, unknown>[] = [];
 	const ghn = (async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input);
@@ -231,7 +231,7 @@ describe("shipping on orders", () => {
 				? [{ _id: 1, name: "Phường Bến Thành", extension_names: ["ben thanh"], status: 1 }]
 				: url.endsWith("/shipping-order/create")
 					? { order_code: "LTEST1" }
-					: { total_fee: 21000 };
+					: null;
 		return new Response(JSON.stringify({ code: 200, data }));
 	}) as typeof fetch;
 	const hcm = (over: Record<string, unknown> = {}) =>
@@ -242,10 +242,10 @@ describe("shipping on orders", () => {
 		db0 = null;
 	});
 
-	it("charges GHN's fee inside HCM and keeps GHN's spelling of the ward", async () => {
+	it("charges the HCM rate and keeps GHN's spelling of the ward", async () => {
 		db0 = await freshDb();
-		const order = await hcm({ shippingFee: 21000 });
-		expect(order).toMatchObject({ shippingFee: 21000, total: PRICE + 21000, address: { ward: "Phường Bến Thành" } });
+		const order = await hcm({ shippingFee: 16500 });
+		expect(order).toMatchObject({ shippingFee: 16500, total: PRICE + 16500, address: { ward: "Phường Bến Thành" } });
 	});
 
 	it("stops when the fee changed since the shopper saw it, or the ward is unknown", async () => {

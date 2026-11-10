@@ -39,7 +39,7 @@ const TEXT = {
 		errors: {
 			invalid: "Vui lòng kiểm tra lại các thông tin được đánh dấu.",
 			quote_changed: "Giỏ hàng hoặc phí giao hàng vừa thay đổi. Đã cập nhật lại, vui lòng kiểm tra rồi đặt lại.",
-			shipping_pending: "Vui lòng chọn phường / xã trong danh sách để tính phí giao hàng.",
+			shipping_pending: "Vui lòng chọn phường / xã trong danh sách.",
 			too_many_orders: "Số điện thoại hoặc mạng của bạn đang có quá nhiều đơn chưa hoàn tất. Vui lòng hoàn tất đơn trước hoặc thử lại sau.",
 			verification_failed: "Xác minh chống spam chưa thành công, vui lòng thử lại.",
 			rate_limited: "Bạn thao tác quá nhanh. Vui lòng đợi một phút rồi thử lại.",
@@ -95,7 +95,7 @@ const TEXT = {
 		errors: {
 			invalid: "Please check the highlighted fields.",
 			quote_changed: "Your cart or the delivery fee has just changed. It has been updated; please check it and place the order again.",
-			shipping_pending: "Please choose your ward from the list to calculate the delivery fee.",
+			shipping_pending: "Please choose your ward from the list.",
 			too_many_orders: "Your phone number or network has too many unfinished orders. Please complete those first or try again later.",
 			verification_failed: "The anti-spam check didn't pass. Please try again.",
 			rate_limited: "Too many attempts. Please wait a minute and try again.",
@@ -143,7 +143,6 @@ const store = {
 	},
 };
 const body = document.body;
-const shippingFee = Number(body.dataset.shippingFee || 30000);
 const freeThreshold = Number(body.dataset.freeThreshold || 150000);
 
 async function api(path, data) {
@@ -295,7 +294,7 @@ function renderBadges() {
 	});
 }
 
-/** On checkout, the address the shipping fee depends on (GHN prices HCM by ward). */
+/** On checkout, the address the shipping fee depends on (HCM or another province; HCM wards are checked against GHN's list). */
 function quoteAddress() {
 	const form = $("[data-checkout-form]");
 	const province = String(form?.elements.province?.value ?? "").trim();
@@ -606,7 +605,7 @@ function initCheckout() {
 		const el = form.elements[k];
 		if (el && !el.value && typeof v === "string") el.value = v;
 	}
-	// Inside HCM the ward picks GHN's price: offer GHN's ward names and re-price as the address changes.
+	// The province sets the fee and HCM wards must be GHN's: offer GHN's ward names and re-price as the address changes.
 	const wardList = $("[data-ward-list]", form);
 	const syncWardList = () => {
 		if (!wardList) return;

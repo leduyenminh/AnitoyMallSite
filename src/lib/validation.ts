@@ -92,7 +92,7 @@ const cartItem = z.object({
 	price: z.number().int().nonnegative().optional(),
 });
 
-/** Where a quote ships to; shipping is priced once the province and ward are known. */
+/** Where a quote ships to; shipping is priced once the province is known (HCM wards are checked against GHN's list). */
 const destination = z.object({
 	province: z.enum(provinces),
 	ward: z.string().trim().max(100),
@@ -103,7 +103,7 @@ const lang = z.enum(["vi", "en"]).optional();
 
 export const quoteSchema = z.object({ items: z.array(cartItem).max(30), address: destination.optional(), lang });
 
-/** The province of Ho Chi Minh City, where GHN delivers; elsewhere Viettel Post. */
+/** The province of Ho Chi Minh City, where the shop sends from (GHN's same-province rate, and GHN parcels from /admin). */
 export const HCM_PROVINCE = "Thành phố Hồ Chí Minh" satisfies (typeof provinces)[number];
 
 export const checkoutSchema = z.object({

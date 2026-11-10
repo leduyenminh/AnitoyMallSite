@@ -80,7 +80,7 @@ export function CheckoutPage({ ctx, hcmWards }: { ctx: ViewCtx; hcmWards: string
 								<input name="ward" required minlength={2} maxlength={100} autocomplete="address-level2" />
 								{hcmWards && (
 									<>
-										{/* GHN prices HCM deliveries by ward: offer GHN's ward names (app.js links the list for HCM). */}
+										{/* GHN books HCM parcels by ward: offer GHN's ward names (app.js links the list for HCM). */}
 										<datalist id="hcm-wards" data-ward-list={HCM_PROVINCE}>
 											{hcmWards.map((w) => (
 												<option value={w}></option>
@@ -186,7 +186,7 @@ function OrderSummary({ ctx, cta, submit }: { ctx: ViewCtx; cta?: { href: string
 					<p class="small muted">{t.privacyNote}</p>
 				</>
 			)}
-			<p class="small muted">{t.shippingNote(Boolean(shipping.ghn), formatVnd(shipping.fee, lang), formatVnd(shipping.freeThreshold, lang))}</p>
+			<p class="small muted">{t.shippingNote(formatVnd(shipping.localFee, lang), formatVnd(shipping.fee, lang), formatVnd(shipping.freeThreshold, lang))}</p>
 		</aside>
 	);
 }

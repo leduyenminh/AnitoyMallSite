@@ -113,12 +113,14 @@ Incoming transfers are matched by the order code in the transfer memo and the ex
 
 **Prices.** A website price is the TikTok list price (the struck-through price when the listing has a TikTok discount) minus TikTok's fees: `TIKTOK_FEE_BPS` (fees in basis points, now 2751 = 6% transaction + 13% commission + 5% Voucher Xtra + ≈3.51% affiliate, from a TikTok settlement), `TIKTOK_FIXED_FEE` (the 3,000đ order processing fee) and `PRICE_ROUNDING` (round to the nearest 1,000đ) in `cloudflare.config.ts`. Taxes TikTok withholds are not deducted. The rule applies when TikTok prices are copied into the database: on the first seed, and from `/admin/san-pham` → **Áp dụng giá từ TikTok** (prices only, stock untouched). Prices you edit in `/admin` stay until you press it again.
 
-**Shipping.** Orders from `FREE_SHIPPING_THRESHOLD` ship free. Inside Ho Chi Minh City GHN prices each order by ward (checkout offers GHN's ward list); other provinces pay the flat `SHIPPING_FEE` until Viettel Post is connected, and so does HCM when GHN can't be reached. A parcel is `PARCEL_WEIGHT_G` and `PARCEL_SIZE_CM` per item, stacked. To turn GHN on:
+**Shipping.** Orders from `FREE_SHIPPING_THRESHOLD` ship free. Other orders pay GHN's rate card (`src/lib/rates.ts`), set in `cloudflare.config.ts` as "grams:đồng" bands: `SHIPPING_RATES_HCM` inside Ho Chi Minh City (16,500đ up to 3 kg), `SHIPPING_RATES_OTHER` for other provinces (26,000đ up to 0.5 kg … 42,000đ up to 5 kg), plus `SHIPPING_FEE_PER_EXTRA_KG` (7,000đ) for each started kg past a zone's last band. The weight is what GHN bills: the larger of the real weight and length × width × height / 5000 (kg). A parcel is `PARCEL_WEIGHT_G` and `PARCEL_SIZE_CM` per item, stacked, so one item bills 0.4 kg and two items 0.8 kg. No carrier is called to price an order; when GHN raises its prices, update the three settings. The card has no island or remote-area surcharges. Product pages and the Merchant feed show the one-item price to other provinces (26,000đ), the most a one-item order pays.
+
+To turn on GHN parcels for HCM orders:
 
 1. Put your GHN token in `.dev.vars` (local) and your secrets file as `GHN_TOKEN`.
-2. Set `GHN_SHOP_ID` (your shop's id at khachhang.ghn.vn) and `SHIP_FROM_PHONE` (the shop's phone) in `cloudflare.config.ts`. `GHN_API_URL` is GHN's production API; set it to `https://dev-online-gateway.ghn.vn` to try GHN's staging account first.
+2. Set `GHN_SHOP_ID` (your shop's id at khachhang.ghn.vn) in `cloudflare.config.ts`. `GHN_API_URL` is GHN's production API; set it to `https://dev-online-gateway.ghn.vn` to try GHN's staging account first.
 
-GHN quotes use its "Preview Order" dry run with the shop as recipient: no order is created and no customer data is sent.
+With GHN on, checkout offers GHN's list of HCM wards and refuses an HCM ward GHN doesn't know, so the parcel can be booked.
 
 **GHN parcels and webhook.** On a confirmed HCM order (COD, or VietQR already paid), `/admin` shows **Tạo vận đơn GHN**: it books the parcel through the GHN API with our order code as GHN's client order code, the customer's name, phone, address and note, and for COD the order total to collect. While a parcel is booked, cancel it in GHN's app before cancelling the order here. GHN then reports progress to `/api/webhooks/ghn`:
 
@@ -167,7 +169,7 @@ The rating on product cards and pages combines TikTok Shop's rating (as last imp
 
 1. Verify the domain in [Google Search Console](https://search.google.com/search-console) and submit `https://anitoymall.com/sitemap.xml` and `https://anitoymall.com/sitemap-en.xml` (both are also listed in `robots.txt`). Every URL in them names its Vietnamese and English versions as `hreflang` alternates.
 2. In [Merchant Center](https://merchants.google.com) (country Vietnam), verify and claim the website.
-3. Set **shipping** to match the site (Vietnam, VND, 30.000đ flat, free from 150.000đ, 2–5 days) and the **return policy** to match `RETURN_DAYS` (0 = no returns except damaged items).
+3. Set **shipping** to match the site (Vietnam, VND, free from 150.000đ, 2–5 days; the fee itself comes from each item's `g:shipping` in the feed, 26.000đ for one item, as there is no flat rate) and the **return policy** to match `RETURN_DAYS` (0 = no returns except damaged items).
 4. **Products → Add products → Add from a file → file link**: `https://anitoymall.com/feeds/google.xml`, language Vietnamese, currency VND, daily fetch. Add a second file link, `https://anitoymall.com/feeds/google-en.xml`, language **English**, country **Vietnam**, currency VND: same items, prices, stock and shipping, with English titles and links to the `/en` pages.
 5. Turn on free listings and automatic item updates. Check **Needs attention** after the first fetch.
 

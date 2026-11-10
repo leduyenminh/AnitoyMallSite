@@ -1,7 +1,7 @@
 import type { Child } from "hono/jsx";
 import { categories, collections, enabledPaymentMethods, groupText, paymentLabelsByLang, site, type Settings } from "../lib/config";
 import { type Lang, LANGS, locales, otherLang, policyAnchors, routes, X_DEFAULT } from "../lib/i18n";
-import { formatShortVnd } from "../lib/money";
+import { formatShortVnd, formatVnd } from "../lib/money";
 import { categoryPath, collectionPath, jsonLdString } from "../lib/seo";
 import { Icon } from "./icons";
 import { languageNames, text } from "./text";
@@ -121,7 +121,7 @@ export function Document({ ctx, meta, children }: { ctx: ViewCtx; meta: PageMeta
 					<script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(data) }} />
 				))}
 			</head>
-			<body class={meta.bodyClass} data-shipping-fee={s.shipping.fee} data-free-threshold={s.shipping.freeThreshold}>
+			<body class={meta.bodyClass} data-free-threshold={s.shipping.freeThreshold}>
 				<a class="skip-link" href="#main">
 					{t.skipLink}
 				</a>
@@ -430,7 +430,7 @@ function CartDrawer({ ctx }: { ctx: ViewCtx }) {
 					<a href={r.cart} class="btn btn--ghost btn--block">
 						{t.viewCart}
 					</a>
-					<p class="muted small center">{t.drawerShipping(formatShortVnd(ctx.s.shipping.fee, lang), formatShortVnd(ctx.s.shipping.freeThreshold, lang))}</p>
+					<p class="muted small center">{t.drawerShipping(formatVnd(ctx.s.shipping.localFee, lang), formatVnd(ctx.s.shipping.freeThreshold, lang))}</p>
 				</footer>
 			</aside>
 		</div>

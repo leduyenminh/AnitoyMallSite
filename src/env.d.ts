@@ -10,7 +10,7 @@ interface Env {
 
 	TURNSTILE_SECRET_KEY?: string;
 
-	/** GHN API token (khachhang.ghn.vn): prices delivery inside Ho Chi Minh City. */
+	/** GHN API token (khachhang.ghn.vn): books Ho Chi Minh City parcels from /admin and checks HCM wards at checkout. */
 	GHN_TOKEN?: string;
 
 	/** Random value GHN sends as the X-Webhook-Token header of order status callbacks. */

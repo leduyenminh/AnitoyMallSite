@@ -8,7 +8,7 @@ import { text } from "../text";
 import { Breadcrumbs, EmptyState, VideoCard } from "../ui";
 
 /** How shipping is charged, as one sentence without the free-shipping part. */
-const shippingRule = (s: Settings, lang: Lang) => text[lang].shippingRule(Boolean(s.shipping.ghn), formatVnd(s.shipping.fee, lang));
+const shippingRule = (s: Settings, lang: Lang) => text[lang].shippingRule(formatVnd(s.shipping.localFee, lang), formatVnd(s.shipping.fee, lang));
 
 export function faq(s: Settings, lang: Lang = "vi"): { q: string; a: string }[] {
 	const labels = paymentLabelsByLang[lang];

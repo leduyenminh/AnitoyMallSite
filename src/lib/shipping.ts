@@ -1,15 +1,16 @@
 import { fold } from "./catalog";
 import { log } from "./log";
 import type { Quote } from "./quote";
+import { billedGrams, cardFee, type RateCard } from "./rates";
 import { HCM_PROVINCE } from "./validation";
 
-// Shipping fees. Orders inside Ho Chi Minh City are priced by GHN for the customer's ward; other
-// provinces will use Viettel Post, which is not connected yet, so they pay the flat SHIPPING_FEE.
-// Orders from the free-shipping threshold ship free. If GHN can't be reached, the flat fee applies.
+// Shipping fees come from GHN's rate card (src/lib/rates.ts): one price inside Ho Chi Minh City,
+// prices by billed weight for other provinces, free from the threshold. No carrier is called to
+// price an order.
 //
-// GHN (https://developer.ghn.vn): the fee comes from "Preview Order", a dry run of Create Order
-// that accepts the post-2025 two-level address (province + ward, `is_new_to_address`). No order is
-// created and no customer data is sent: the recipient is the shop itself (SHIP_FROM_PHONE).
+// GHN's API (https://developer.ghn.vn) books HCM parcels from /admin and reports their status. It
+// uses the post-2025 two-level address (province + ward, `is_new_to_address`), so checkout checks
+// HCM wards against GHN's list.
 
 /** One parcel: grams and centimetres. */
 export interface Parcel {
@@ -23,20 +24,25 @@ export interface GhnConfig {
 	apiUrl: string;
 	token: string;
 	shopId: number;
-	/** The shop's name and phone, used as the recipient of fee previews. */
-	previewName: string;
-	previewPhone: string;
 	/** Value GHN sends in the X-Webhook-Token header of order callbacks; callbacks are refused without it. */
 	webhookSecret: string | null;
 }
 
 export interface ShippingSettings {
-	/** Flat fee where no carrier price applies. */
+	/**
+	 * One item to another province: the most a one-item order pays. Used before the address is
+	 * known (structured data, the Merchant feed).
+	 */
 	fee: number;
+	/** One item inside HCM: the lowest fee, shown as the starting price. */
+	localFee: number;
 	freeThreshold: number;
 	eta: string;
 	/** Packed size of one item; an order stacks its items. */
 	parcel: Parcel;
+	/** GHN's rate card: the fee of every order. */
+	rates: RateCard;
+	/** GHN's API: HCM ward names at checkout and parcel booking from /admin. */
 	ghn: GhnConfig | null;
 }
 
@@ -45,7 +51,7 @@ export interface Destination {
 	ward: string;
 }
 
-/** The ward is not one GHN delivers to (or is misspelled): the shopper must pick one from the list. */
+/** An HCM ward GHN doesn't deliver to (or misspelled): the shopper must pick one from the list. */
 export class ShippingAddressError extends Error {}
 
 /** The parcel for `items` units: weights add up and the boxes stack (GHN caps a side at 200cm). */
@@ -66,8 +72,8 @@ interface GhnPlace {
 }
 
 /**
- * Calls GHN. `noCustomerData` marks requests that carry no customer data (master data, fee
- * previews addressed to the shop): only their errors keep GHN's message text.
+ * Calls GHN. `noCustomerData` marks requests that carry no customer data (master data): only
+ * their errors keep GHN's message text.
  */
 async function ghnCall<T>(cfg: GhnConfig, path: string, f: typeof fetch, body?: unknown, noCustomerData = body === undefined): Promise<T> {
 	const res = await f(`${cfg.apiUrl}${path}`, {
@@ -134,53 +140,20 @@ export function matchWard(wards: GhnPlace[], input: string): string | null {
 	return wards.find((w) => names(w).includes(wanted))?.name ?? null;
 }
 
-const FEE_TTL_MS = 30 * 60_000;
-const feeCache = new Map<string, { at: number; fee: number }>();
-
-/** GHN's fee to deliver `parcel` to a ward (GHN's own province and ward names). */
-export async function ghnFee(cfg: GhnConfig, to: Destination, parcel: Parcel, f: typeof fetch = fetch): Promise<number> {
-	const key = `${to.province}|${to.ward}|${parcel.weight}|${parcel.length}x${parcel.width}x${parcel.height}`;
-	const hit = feeCache.get(key);
-	if (hit && Date.now() - hit.at < FEE_TTL_MS) return hit.fee;
-	const data = await ghnCall<{ total_fee?: unknown }>(
-		cfg,
-		"/shiip/public-api/v2/shipping-order/preview",
-		f,
-		{
-			payment_type_id: 1,
-			required_note: "CHOXEMHANGKHONGTHU",
-			to_name: cfg.previewName,
-			to_phone: cfg.previewPhone,
-			to_address: `${to.ward}, ${to.province}`,
-			to_ward_name: to.ward,
-			to_province_name: to.province,
-			is_new_to_address: true,
-			service_type_id: 2,
-			content: "Mô hình, phụ kiện anime",
-			...parcel,
-		},
-		true,
-	);
-	const fee = data.total_fee;
-	if (typeof fee !== "number" || !Number.isSafeInteger(fee) || fee < 0 || fee > 5_000_000) throw new Error("ghn fee invalid");
-	// Bounded: drop the oldest entry rather than the whole cache.
-	if (feeCache.size >= 500) feeCache.delete(feeCache.keys().next().value!);
-	feeCache.set(key, { at: Date.now(), fee });
-	return fee;
-}
-
 // ------------------------------------------------------------------ pricing a quote
 
 export interface ShippedQuote extends Quote {
-	/** True until the shopper gives an address the fee depends on. */
+	/** True until the shopper gives the province the fee depends on. */
 	shippingPending: boolean;
-	/** GHN's spelling of the ward, when GHN priced the order. */
+	/** GHN's spelling of an HCM ward. */
 	ward?: string;
 }
 
 /**
- * Adds the shipping fee to a quote. Free from the threshold; inside HCM, GHN's price for the ward
- * (throws ShippingAddressError for a ward GHN doesn't know); elsewhere, or when GHN fails, the flat fee.
+ * Adds the shipping fee to a quote: free from the threshold, otherwise the rate card's price for
+ * the zone and the parcel's billed weight. Inside HCM, with GHN on, the ward must be one GHN knows
+ * so the parcel can be booked (ShippingAddressError otherwise); if GHN's ward list can't be
+ * loaded, the ward is kept as typed.
  */
 export async function priceShipping(quote: Quote, rules: ShippingSettings, to: Destination | undefined, f: typeof fetch = fetch): Promise<ShippedQuote> {
 	const done = (fee: number, extra: Partial<ShippedQuote> = {}): ShippedQuote => ({
@@ -190,29 +163,28 @@ export async function priceShipping(quote: Quote, rules: ShippingSettings, to: D
 		shippingPending: false,
 		...extra,
 	});
-	if (quote.itemCount === 0 || quote.subtotal >= rules.freeThreshold) return done(0);
-	// Without GHN the fee doesn't depend on the address; with it, HCM needs the ward first.
-	if (!to) return rules.ghn ? done(0, { shippingPending: true }) : done(rules.fee);
-	const ghnArea = Boolean(rules.ghn) && to.province === HCM_PROVINCE;
-	if (ghnArea && !to.ward.trim()) return done(0, { shippingPending: true });
-	if (!ghnArea || !rules.ghn) return done(rules.fee);
+	if (quote.itemCount === 0) return done(0);
+	const free = quote.subtotal >= rules.freeThreshold;
+	if (!to) return free ? done(0) : done(0, { shippingPending: true });
+	const local = to.province === HCM_PROVINCE;
+	const fee = free ? 0 : cardFee(rules.rates, local, billedGrams(parcelFor(rules.parcel, quote.itemCount)));
+	const ward = local && rules.ghn ? await knownWard(rules.ghn, to, f) : null;
+	return done(fee, ward ? { ward } : {});
+}
 
-	let area: { province: string; wards: GhnPlace[] };
+/** GHN's spelling of the HCM ward; null when none is typed yet or GHN's list can't be loaded. */
+async function knownWard(cfg: GhnConfig, to: Destination, f: typeof fetch): Promise<string | null> {
+	if (!to.ward.trim()) return null;
+	let area: Area;
 	try {
-		area = await ghnWards(rules.ghn, to.province, f);
+		area = await ghnWards(cfg, to.province, f);
 	} catch (error) {
 		log.warn("shipping.ghn_failed", { step: "wards", reason: error instanceof Error ? error.message : "unknown" });
-		return done(rules.fee);
+		return null;
 	}
 	const ward = matchWard(area.wards, to.ward);
 	if (!ward) throw new ShippingAddressError("unknown ward");
-	try {
-		const fee = await ghnFee(rules.ghn, { province: area.province, ward }, parcelFor(rules.parcel, quote.itemCount), f);
-		return done(fee, { ward });
-	} catch (error) {
-		log.warn("shipping.ghn_failed", { step: "fee", reason: error instanceof Error ? error.message : "unknown" });
-		return done(rules.fee, { ward });
-	}
+	return ward;
 }
 
 // ------------------------------------------------------------------ booking a parcel
@@ -257,8 +229,7 @@ export async function ghnCreateOrder(cfg: GhnConfig, b: GhnBooking, f: typeof fe
 /** GHN statuses that mean the parcel has left the shop. */
 export const GHN_IN_TRANSIT = new Set(["picked", "storing", "sorting", "transporting", "delivering", "money_collect_delivering", "delivery_fail"]);
 
-/** For tests: forget cached GHN wards and fees. */
+/** For tests: forget cached GHN wards. */
 export function clearShippingCache() {
 	wardCache.clear();
-	feeCache.clear();
 }

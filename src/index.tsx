@@ -391,7 +391,7 @@ for (const lang of LANGS) {
 const cartPage = (lang: Lang) => (c: C) => page(c, { title: titled(text[lang].cart), noindex: true, alternates: inAll("cart") }, <CartPage ctx={viewCtx(c)} />);
 
 const checkoutPage = (lang: Lang) => async (c: C) => {
-	// Inside HCM GHN prices by ward, so checkout offers GHN's ward names (cached a day per isolate).
+	// GHN books HCM parcels by ward, so checkout offers GHN's ward names (cached a day per isolate).
 	const ghn = c.get("s").shipping.ghn;
 	const hcmWards = ghn
 		? await ghnWards(ghn, HCM_PROVINCE).then(

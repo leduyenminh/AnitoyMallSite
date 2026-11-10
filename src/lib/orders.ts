@@ -109,7 +109,7 @@ export async function createOrder(db: D1Database, s: Settings, raw: unknown, ctx
 		paymentMethod: input.paymentMethod,
 		paymentStatus: "unpaid",
 		customer: { name: input.customer.name, phone: phone!, ...(email ? { email } : {}) },
-		// GHN's spelling of the ward when GHN priced the delivery, so the parcel can be booked as is.
+		// GHN's spelling of an HCM ward when GHN's list checked it, so the parcel can be booked as is.
 		address: { ...input.address, ...(quote.ward ? { ward: quote.ward } : {}) },
 		...(input.note ? { note: input.note } : {}),
 		lines: quote.lines.map((l) => ({

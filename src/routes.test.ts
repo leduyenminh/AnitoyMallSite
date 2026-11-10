@@ -11,7 +11,6 @@ afterAll(() => db.close());
 const env = {
 	DB: db,
 	ADMIN_PASSWORD: "test-admin-pass",
-	SHIPPING_FEE: "30000",
 	FREE_SHIPPING_THRESHOLD: "150000",
 } as unknown as Env;
 const ctx = { waitUntil: () => undefined, passThroughOnException: () => undefined, props: {} } as unknown as ExecutionContext;

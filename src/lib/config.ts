@@ -1,5 +1,6 @@
 import type { Lang } from "./i18n";
 import { type PricingRule, pricingRule } from "./pricing";
+import { billedGrams, cardFee, GHN_RATES, parseBands, parseExtraPerKg, type RateCard } from "./rates";
 import type { GhnConfig, Parcel, ShippingSettings } from "./shipping";
 import type { PaymentMethod } from "./types";
 
@@ -122,18 +123,15 @@ export function parseParcel(weight: string | undefined, size: string | undefined
 	return { weight: w, length, width, height };
 }
 
-/** GHN is used once its token, shop id and the shop's phone are all set. */
+/** GHN's API is used once its token and the shop id are both set. */
 function ghnConfig(env: Env): GhnConfig | null {
 	const token = (env.GHN_TOKEN ?? "").trim();
 	const shopId = Number((env.GHN_SHOP_ID ?? "").trim());
-	const phone = (env.SHIP_FROM_PHONE ?? "").trim();
-	if (!token || !Number.isSafeInteger(shopId) || shopId <= 0 || !phone) return null;
+	if (!token || !Number.isSafeInteger(shopId) || shopId <= 0) return null;
 	return {
 		apiUrl: ((env.GHN_API_URL ?? "").trim() || "https://online-gateway.ghn.vn").replace(/\/$/, ""),
 		token,
 		shopId,
-		previewName: site.name,
-		previewPhone: phone,
 		webhookSecret: (env.GHN_WEBHOOK_SECRET ?? "").trim() || null,
 	};
 }
@@ -143,14 +141,22 @@ export function settings(env: Env, origin = "http://localhost:5173"): Settings {
 	const trim = (v: string | undefined) => (v ?? "").trim();
 	const bankAccountNo = trim(env.BANK_ACCOUNT_NO);
 	const bankAccountName = trim(env.BANK_ACCOUNT_NAME);
+	const parcel = parseParcel(env.PARCEL_WEIGHT_G, env.PARCEL_SIZE_CM);
+	const rates: RateCard = {
+		local: parseBands(env.SHIPPING_RATES_HCM, GHN_RATES.local),
+		other: parseBands(env.SHIPPING_RATES_OTHER, GHN_RATES.other),
+		extraPerKg: parseExtraPerKg(env.SHIPPING_FEE_PER_EXTRA_KG, GHN_RATES.extraPerKg),
+	};
 	return {
 		siteUrl: (trim(env.SITE_URL) || origin).replace(/\/$/, ""),
 		pricing: pricingRule(env.TIKTOK_FEE_BPS, env.TIKTOK_FIXED_FEE, env.PRICE_ROUNDING),
 		shipping: {
-			fee: num(env.SHIPPING_FEE, 30000),
+			fee: cardFee(rates, false, billedGrams(parcel)),
+			localFee: cardFee(rates, true, billedGrams(parcel)),
 			freeThreshold: num(env.FREE_SHIPPING_THRESHOLD, 150000),
 			eta: trim(env.DELIVERY_ETA) || "2–5",
-			parcel: parseParcel(env.PARCEL_WEIGHT_G, env.PARCEL_SIZE_CM),
+			parcel,
+			rates,
 			ghn: ghnConfig(env),
 		},
 		returnDays: num(env.RETURN_DAYS, 0),

@@ -45,7 +45,7 @@ const vi = {
 	loading: "Đang tải…",
 	subtotal: "Tạm tính",
 	viewCart: "Xem giỏ hàng",
-	drawerShipping: (fee: string, freeFrom: string) => `Phí ship ${fee} · miễn phí từ ${freeFrom}`,
+	drawerShipping: (fee: string, freeFrom: string) => `Phí ship từ ${fee} · miễn phí từ ${freeFrom}`,
 	viewAll: "Xem tất cả",
 	from: "từ ",
 	ttRatingTitle: "Đánh giá trên TikTok Shop",
@@ -169,7 +169,7 @@ const vi = {
 	province: "Tỉnh / Thành phố *",
 	chooseProvince: "Chọn tỉnh / thành phố",
 	ward: "Phường / Xã *",
-	wardHint: "Chọn phường / xã trong danh sách để tính phí giao hàng.",
+	wardHint: "Chọn phường / xã trong danh sách để shop giao đúng địa chỉ.",
 	street: "Số nhà, tên đường *",
 	noteForShop: "Ghi chú cho shop",
 	notePlaceholder: "Ví dụ: giao giờ hành chính",
@@ -183,7 +183,8 @@ const vi = {
 	total: "Tổng cộng",
 	placeOrder: "Đặt hàng",
 	privacyNote: "Thông tin của bạn chỉ dùng để giao hàng và liên hệ về đơn này.",
-	shippingNote: (ghn: boolean, fee: string, freeFrom: string) => `${ghn ? `Phí ship TP.HCM theo bảng giá GHN, tỉnh khác ${fee}` : `Phí ship ${fee}`}, miễn phí cho đơn từ ${freeFrom}.`,
+	shippingNote: (local: string, other: string, freeFrom: string) =>
+		`Phí ship theo bảng giá GHN, tuỳ khối lượng: TP.HCM từ ${local}, tỉnh khác từ ${other}, miễn phí cho đơn từ ${freeFrom}.`,
 	// Order
 	orderStatus: {
 		pending: "Chờ xác nhận",
@@ -236,8 +237,7 @@ const vi = {
 	phoneNumber: "Số điện thoại",
 	lookUp: "Tra cứu",
 	// Info pages
-	shippingRule: (ghn: boolean, fee: string) =>
-		ghn ? `Giao trong TP.HCM: phí theo bảng giá GHN, hiện khi bạn chọn phường / xã. Tỉnh khác: ${fee}` : `Phí ship đồng giá ${fee}`,
+	shippingRule: (local: string, other: string) => `Phí ship theo bảng giá GHN, tuỳ khối lượng kiện hàng: trong TP.HCM từ ${local}, tỉnh khác từ ${other}`,
 	helpMoreBefore: "Cần thêm trợ giúp? Xem ",
 	helpMorePolicies: "chính sách của shop",
 	helpMoreMiddle: " hoặc nhắn tin cho shop trên ",
@@ -328,7 +328,7 @@ const en: Text = {
 	loading: "Loading…",
 	subtotal: "Subtotal",
 	viewCart: "View cart",
-	drawerShipping: (fee: string, freeFrom: string) => `Shipping ${fee} · free from ${freeFrom}`,
+	drawerShipping: (fee: string, freeFrom: string) => `Shipping from ${fee} · free from ${freeFrom}`,
 	viewAll: "View all",
 	from: "from ",
 	ttRatingTitle: "Rating on TikTok Shop",
@@ -448,7 +448,7 @@ const en: Text = {
 	province: "Province / City *",
 	chooseProvince: "Choose a province or city",
 	ward: "Ward / Commune *",
-	wardHint: "Choose your ward from the list to calculate the delivery fee.",
+	wardHint: "Choose your ward from the list so we deliver to the right address.",
 	street: "House number and street *",
 	noteForShop: "Note for the shop",
 	notePlaceholder: "E.g. deliver during office hours",
@@ -462,8 +462,8 @@ const en: Text = {
 	total: "Total",
 	placeOrder: "Place order",
 	privacyNote: "Your details are used only to deliver this order and to contact you about it.",
-	shippingNote: (ghn: boolean, fee: string, freeFrom: string) =>
-		`${ghn ? `Shipping in Ho Chi Minh City at GHN's rates, other provinces ${fee}` : `Shipping ${fee}`}, free on orders from ${freeFrom}.`,
+	shippingNote: (local: string, other: string, freeFrom: string) =>
+		`Shipping at GHN's rates by weight: from ${local} within Ho Chi Minh City, from ${other} to other provinces, free on orders from ${freeFrom}.`,
 	orderStatus: {
 		pending: "Awaiting confirmation",
 		confirmed: "Confirmed",
@@ -521,8 +521,8 @@ const en: Text = {
 	orderCode: "Order code",
 	phoneNumber: "Phone number",
 	lookUp: "Look up",
-	shippingRule: (ghn: boolean, fee: string) =>
-		ghn ? `Within Ho Chi Minh City: GHN's rates, shown once you choose your ward. Other provinces: ${fee}` : `Flat shipping fee of ${fee}`,
+	shippingRule: (local: string, other: string) =>
+		`Shipping at GHN's rates by parcel weight: from ${local} within Ho Chi Minh City, from ${other} to other provinces`,
 	helpMoreBefore: "Need more help? See the ",
 	helpMorePolicies: "shop's policies",
 	helpMoreMiddle: " or message the shop on ",
