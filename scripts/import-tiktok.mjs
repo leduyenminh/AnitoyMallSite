@@ -61,6 +61,18 @@ async function fetchListing(id) {
   return { comp, url: res.url.split("?")[0] };
 }
 
+/** Plain-text description: text blocks as paragraphs, bulleted ("ul") blocks as "• " lines. */
+function describe(blocks) {
+  return (blocks ?? [])
+    .map((b) => {
+      if (b.type === "text") return b.text?.trim() ?? "";
+      if (b.type === "ul") return (b.content ?? []).map((line) => String(line).trim()).filter(Boolean).map((line) => `• ${line}`).join("\n");
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 async function importListing(entry) {
   const id = entry.tiktokProductId;
   const { comp, url } = await fetchListing(id);
@@ -99,10 +111,7 @@ async function importListing(entry) {
     };
   });
 
-  const description = (info.desc_blocks ?? [])
-    .filter((b) => b.type === "text" && b.text?.trim())
-    .map((b) => b.text.trim())
-    .join("\n\n");
+  const description = describe(info.desc_blocks);
 
   const attributes = (info.specifications ?? [])
     .filter((s) => s.value && !/^none$/i.test(s.value.trim()))

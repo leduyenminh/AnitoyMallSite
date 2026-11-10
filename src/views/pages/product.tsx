@@ -3,11 +3,12 @@ import { enabledPaymentMethods, paymentLabelsByLang, site } from "../../lib/conf
 import { routes } from "../../lib/i18n";
 import { formatVnd, percentOff } from "../../lib/money";
 import { categoryPath, collectionPath, imageSrc } from "../../lib/seo";
+import type { PublicReview } from "../../lib/reviews";
 import type { Product } from "../../lib/types";
 import { Icon } from "../icons";
 import type { ViewCtx } from "../layout";
 import { text } from "../text";
-import { Breadcrumbs, Paragraphs, ProductGrid, Rail, SectionHeader, TikTokStats, VideoCard } from "../ui";
+import { Breadcrumbs, Paragraphs, ProductGrid, Rail, ReviewList, SectionHeader, TikTokStats, VideoCard } from "../ui";
 
 /**
  * `product` and `related` are already in the page's language (localizeProduct). `untranslated`:
@@ -19,12 +20,15 @@ export function ProductPage({
 	related,
 	selectedSkuId,
 	untranslated = false,
+	reviews = [],
 }: {
 	ctx: ViewCtx;
 	product: Product;
 	related: Product[];
 	selectedSkuId?: string;
 	untranslated?: boolean;
+	/** Approved reviews from this website's buyers, newest first. */
+	reviews?: PublicReview[];
 }) {
 	const { s, lang } = ctx;
 	const t = text[lang];
@@ -207,6 +211,8 @@ export function ProductPage({
 					</section>
 				)}
 			</div>
+
+			{reviews.length > 0 && <ReviewList reviews={reviews} count={product.siteReviews?.count ?? reviews.length} lang={lang} />}
 
 			{vids.length > 0 && (
 				<section class="section" id="videos">

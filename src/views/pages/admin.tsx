@@ -3,6 +3,7 @@ import { catalogSource } from "../../lib/db";
 import { formatVnd } from "../../lib/money";
 import { allowedActions, type OrderAction } from "../../lib/orders";
 import { paymentLabels } from "../../lib/config";
+import type { Review } from "../../lib/reviews";
 import type { Order, Product } from "../../lib/types";
 import { statusLabels } from "./order";
 
@@ -35,6 +36,7 @@ export function AdminDocument({ title, build, children }: { title: string; build
 					<nav>
 						<a href="/admin">Đơn hàng</a>
 						<a href="/admin/san-pham">Sản phẩm</a>
+						<a href="/admin/danh-gia">Đánh giá</a>
 						<a href="/" target="_blank">
 							Xem shop ↗
 						</a>
@@ -282,6 +284,74 @@ export function AdminProducts({ products }: { products: Product[] }) {
 					</table>
 				</section>
 			))}
+		</>
+	);
+}
+
+const reviewStatusLabels: Record<Review["status"], string> = { pending: "Chờ duyệt", approved: "Đã đăng", hidden: "Đã ẩn" };
+
+/** Buyers' reviews: approve to publish on the product page (and count in its rating), or hide. */
+export function AdminReviews({ reviews, counts, status, titles }: { reviews: Review[]; counts: Record<Review["status"], number>; status?: Review["status"]; titles: Record<string, string> }) {
+	const tabs: (Review["status"] | "")[] = ["", "pending", "approved", "hidden"];
+	return (
+		<>
+			<h1>Đánh giá</h1>
+			<p class="small muted">
+				Người mua chấm điểm sau khi đơn đã giao. Chỉ đánh giá đã duyệt mới hiện trên trang sản phẩm và được tính vào điểm chung với TikTok Shop. Ẩn những nhận xét có số
+				điện thoại, địa chỉ hoặc nội dung không phù hợp.
+			</p>
+			<nav class="sort toolbar">
+				{tabs.map((t) => (
+					<a class="chip" aria-pressed={(status ?? "") === t ? "true" : "false"} href={t ? `/admin/danh-gia?status=${t}` : "/admin/danh-gia"}>
+						{t ? `${reviewStatusLabels[t]} (${counts[t]})` : "Tất cả"}
+					</a>
+				))}
+			</nav>
+			{reviews.length === 0 ? (
+				<p class="muted">Chưa có đánh giá.</p>
+			) : (
+				<table class="table">
+					<thead>
+						<tr>
+							<th>Sản phẩm</th>
+							<th>Sao</th>
+							<th>Nhận xét</th>
+							<th>Đơn</th>
+							<th>Trạng thái</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						{reviews.map((r) => (
+							<tr data-review-id={r.id} data-review-updated={r.updatedAt}>
+								<td>{titles[r.productId] ?? r.productId}</td>
+								<td>{"★".repeat(r.rating)}</td>
+								<td>
+									<strong>{r.author}</strong> · <small class="muted">{dt(r.updatedAt)}</small>
+									<br />
+									<span style="white-space:pre-line">{r.comment || "–"}</span>
+								</td>
+								<td>
+									<a href={`/admin/don-hang/${r.orderId}`}>{r.orderId}</a>
+								</td>
+								<td>{reviewStatusLabels[r.status]}</td>
+								<td>
+									{r.status !== "approved" && (
+										<button type="button" class="btn btn--primary btn--sm" data-review-status="approved">
+											Duyệt
+										</button>
+									)}{" "}
+									{r.status !== "hidden" && (
+										<button type="button" class="btn btn--ghost btn--sm" data-review-status="hidden">
+											Ẩn
+										</button>
+									)}
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			)}
 		</>
 	);
 }

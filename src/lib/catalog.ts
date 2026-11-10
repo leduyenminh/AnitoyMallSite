@@ -14,6 +14,29 @@ export const isSoldOut = (p: Product) => totalStock(p) <= 0;
 /** Units sold on TikTok Shop plus units sold on this website. */
 export const unitsSold = (p: Product) => (p.tiktokSold ?? 0) + (p.siteSold ?? 0);
 
+export interface Rating {
+	/** Average stars of TikTok Shop and this website together, weighted by their number of reviews. */
+	value: number;
+	count: number;
+	tiktok?: { value: number; count: number };
+	site?: { value: number; count: number };
+}
+
+/**
+ * One rating from TikTok Shop's (as last imported, with its count) and this website's approved
+ * reviews (src/lib/reviews.ts). Null when neither has any. Shown with attribution to both.
+ */
+export function combinedRating(p: Pick<Product, "tiktokRating" | "siteReviews">): Rating | null {
+	const imported = p.tiktokRating && p.tiktokRating.value > 0 ? { value: p.tiktokRating.value, count: Math.max(0, Math.trunc(p.tiktokRating.count)) } : undefined;
+	const site = p.siteReviews && p.siteReviews.count > 0 ? { value: p.siteReviews.sum / p.siteReviews.count, count: p.siteReviews.count } : undefined;
+	// A TikTok rating imported without a count can't be weighted: shown as it is, but only alone.
+	if (!site) return imported ? { value: imported.value, count: imported.count, tiktok: imported } : null;
+	const tt = imported && imported.count > 0 ? imported : undefined;
+	const count = (tt?.count ?? 0) + site.count;
+	const value = ((tt ? tt.value * tt.count : 0) + p.siteReviews!.sum) / count;
+	return { value, count, ...(tt ? { tiktok: tt } : {}), site };
+}
+
 /** Cheapest SKU in stock (or cheapest overall when sold out): what a card shows. */
 export function leadSku(p: Product): Sku | undefined {
 	const pool = p.skus.filter((s) => s.stock > 0);

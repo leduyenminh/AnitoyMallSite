@@ -42,6 +42,8 @@ export interface Product {
 	tiktokSold?: number;
 	/** Units sold on this website (orders confirmed, shipped, delivered or paid). Computed from orders, never stored. */
 	siteSold?: number;
+	/** Approved reviews from this website's buyers (count and sum of stars). Computed, never stored. */
+	siteReviews?: { count: number; sum: number };
 	videoIds: string[];
 	skus: Sku[];
 	createdAt: string;

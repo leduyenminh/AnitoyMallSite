@@ -33,6 +33,7 @@ import {
 	type OrderAction,
 } from "./lib/orders";
 import { handleBankTransaction, sepayAuthorized } from "./lib/payments";
+import { approvedReviews, listReviews, reviewCounts, reviewsForOrder, setReviewStatus, submitReview } from "./lib/reviews";
 import { buildQuote, type Quote } from "./lib/quote";
 import { ghnWards, priceShipping, ShippingAddressError } from "./lib/shipping";
 import {
@@ -52,7 +53,7 @@ import {
 import { englishSlug, englishText, localizeLines, localizeProduct } from "./lib/translations";
 import { ghnCallbackSchema, HCM_PROVINCE, isOrderCode, normalisePhone, normaliseOrderCode, lookupSchema, quoteSchema } from "./lib/validation";
 import { Document, THEME_BOOT, type PageMeta, type ViewCtx } from "./views/layout";
-import { AdminDocument, AdminOrder, AdminOrders, AdminProducts } from "./views/pages/admin";
+import { AdminDocument, AdminOrder, AdminOrders, AdminProducts, AdminReviews } from "./views/pages/admin";
 import { CartPage, CheckoutPage } from "./views/pages/checkout";
 import { HomePage } from "./views/pages/home";
 import { AboutPage, ErrorPage, faq, HelpPage, NotFoundPage, PolicyPage, VideosPage } from "./views/pages/info";
@@ -317,6 +318,7 @@ for (const lang of LANGS) {
 		}
 		const selected = c.req.query("sku");
 		const shown = localizeProduct(product, lang);
+		const reviews = product.siteReviews ? await approvedReviews(c.env.DB, product.id) : [];
 		const paths = { vi: productPath(product, "vi"), en: productPath(product, "en") };
 		return page(
 			c,
@@ -343,6 +345,7 @@ for (const lang of LANGS) {
 				related={relatedProducts(product, products, videoById, 8).map((p) => localizeProduct(p, lang))}
 				selectedSkuId={selected}
 				untranslated={lang !== "vi" && !englishText(product)}
+				reviews={reviews}
 			/>,
 			{ alt: `${paths[other]}${selected ? `?sku=${encodeURIComponent(selected)}` : ""}` },
 		);
@@ -408,7 +411,8 @@ const orderPage = (lang: Lang) => async (c: C) => {
 	const lines = lang === "vi" ? order.lines : localizeLines(order.lines, await loadCatalog(c.env.DB), lang);
 	// The same order in the other language: the link carries the access token this page was opened with.
 	const alt = `${routes[otherLang(lang)].order}/${encodeURIComponent(order.id)}?t=${encodeURIComponent(token ?? "")}`;
-	return page(c, { title: titled(t.meta.orderTitle(order.id)), noindex: true }, <OrderPage ctx={viewCtx(c)} order={order} lines={lines} notice={notice} />, { alt });
+	const reviews = order.status === "delivered" ? await reviewsForOrder(c.env.DB, order.id) : [];
+	return page(c, { title: titled(t.meta.orderTitle(order.id)), noindex: true }, <OrderPage ctx={viewCtx(c)} order={order} lines={lines} notice={notice} reviews={reviews} />, { alt });
 };
 
 app.get("/gio-hang", cartPage("vi"));
@@ -548,6 +552,15 @@ app.get("/api/orders/:id/status", async (c) => {
 	return c.json({ status: order.status, paymentStatus: order.paymentStatus, version: order.version }, 200, noStore);
 });
 
+/** A buyer reviews a product of their delivered order (needs the order's access token). */
+app.post("/api/orders/:id/reviews", async (c) => {
+	if (!(await allow(c.env.API_LIMITER, `review:${clientIp(c.req.raw)}`))) return tooMany(c);
+	const result = await submitReview(c.env.DB, c.req.param("id"), await c.req.json().catch(() => null));
+	if (result === "saved") log.info("review.saved", { orderId: c.req.param("id") });
+	const status = { saved: 200, invalid: 400, not_found: 404, not_delivered: 409 }[result] as 200;
+	return c.json(result === "saved" ? { ok: true } : { error: result }, status, noStore);
+});
+
 // ------------------------------------------------------------------ bank transfers
 
 /** SePay: incoming transfers on the BIDV account auto-confirm VietQR orders. */
@@ -651,6 +664,23 @@ app.get("/admin/don-hang/:id", async (c) => {
 app.get("/admin/san-pham", async (c) => {
 	const products = [...(await loadCatalog(c.env.DB))].sort((a, b) => b.featured - a.featured);
 	return adminPage(c, "Sản phẩm", <AdminProducts products={products} />);
+});
+
+app.get("/admin/danh-gia", async (c) => {
+	const q = c.req.query("status");
+	const status = q === "pending" || q === "approved" || q === "hidden" ? q : undefined;
+	const [reviews, counts, catalog] = await Promise.all([listReviews(c.env.DB, status), reviewCounts(c.env.DB), loadCatalog(c.env.DB)]);
+	const titles = Object.fromEntries(catalog.map((p) => [p.id, p.title]));
+	return adminPage(c, "Đánh giá", <AdminReviews reviews={reviews} counts={counts} status={status} titles={titles} />);
+});
+
+app.post("/api/admin/reviews/:id", async (c) => {
+	const b = (await c.req.json().catch(() => ({}))) as { status?: unknown; seen?: unknown };
+	if ((b.status !== "approved" && b.status !== "hidden") || typeof b.seen !== "string" || b.seen.length > 40) return c.json({ error: "invalid" }, 400);
+	// Only the version the seller read: a review the buyer edited since then is shown to her again.
+	if ((await setReviewStatus(c.env.DB, c.req.param("id"), b.status, b.seen)) === "changed") return c.json({ error: "changed" }, 409);
+	log.info("review.moderated", { reviewId: c.req.param("id"), status: b.status });
+	return c.json({ ok: true });
 });
 
 app.post("/api/admin/orders/:id", async (c) => {

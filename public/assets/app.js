@@ -60,6 +60,10 @@ const TEXT = {
 		total: "Tổng cộng",
 		history: "Lịch sử",
 		lookupHint: "Để xem địa chỉ và thanh toán lại, mở đường dẫn đơn hàng bạn nhận được khi đặt.",
+		reviewPickStars: "Chọn số sao trước khi gửi.",
+		reviewSaved: "Cảm ơn bạn! Đánh giá sẽ hiện sau khi shop duyệt.",
+		reviewFailed: "Chưa gửi được đánh giá, thử lại sau.",
+		reviewUpdate: "Cập nhật đánh giá",
 	},
 	en: {
 		locale: "en-GB",
@@ -112,6 +116,10 @@ const TEXT = {
 		total: "Total",
 		history: "History",
 		lookupHint: "To see the address or pay again, open the order link you received when you ordered.",
+		reviewPickStars: "Choose a number of stars first.",
+		reviewSaved: "Thank you! Your review will appear once the shop approves it.",
+		reviewFailed: "Your review couldn't be sent. Please try again later.",
+		reviewUpdate: "Update review",
 	},
 };
 const T = TEXT[LANG];
@@ -691,6 +699,39 @@ function initOrder() {
 			} catch {
 				toast(esc(b.dataset.copy));
 			}
+		}),
+	);
+
+	// Reviews of a delivered order (the server checks the token and the delivery).
+	$$("[data-review-form]", root).forEach((form) =>
+		form.addEventListener("submit", async (e) => {
+			e.preventDefault();
+			const err = $("[data-form-error]", form);
+			const btn = $('button[type="submit"]', form);
+			const data = new FormData(form);
+			const rating = Number(data.get("rating"));
+			if (!rating) {
+				err.textContent = T.reviewPickStars;
+				err.hidden = false;
+				return;
+			}
+			btn.disabled = true;
+			const res = await api(`/api/orders/${encodeURIComponent(id)}/reviews`, {
+				t: token ?? "",
+				productId: form.dataset.productId,
+				rating,
+				comment: String(data.get("comment") || "").slice(0, 1000),
+				lang: LANG,
+			});
+			btn.disabled = false;
+			if (res.ok) {
+				err.hidden = true;
+				btn.textContent = T.reviewUpdate;
+				toast(esc(T.reviewSaved), 5000);
+				return;
+			}
+			err.textContent = res.status === 429 ? T.tooFast : T.reviewFailed;
+			err.hidden = false;
 		}),
 	);
 

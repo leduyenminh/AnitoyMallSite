@@ -60,17 +60,19 @@
 			"title": "ANITOY Genshin Impact Acrylic Character Keychain – Yae Miko, Zhongli, Diluc, Klee, Venti, Xiao, Ganyu, Keqing, Kazuha, Tartaglia",
 			"description": "Genshin Impact keychain\n\nSize: acrylic thickness 3.5 mm, keychain length 6 cm\n\nSome real photos:"
 		},
-		"v-frieren-20cm": {
-			"slug": "frieren-holding-flowers-figure-20cm-with-base",
-			"source": "08c33fbc",
-			"title": "Frieren Figure 20 cm, Standing and Holding Flowers – Frieren: Beyond Journey's End – with Base, No Box",
-			"description": "Frieren holding a bouquet in memory of Himmel – the most memorable moment of the series. 20 cm tall, with a display base (no box)."
+		"tt-1734056119197271180": {
+			"slug": "frieren-figure-20cm-with-base-new-edition",
+			"source": "edad3e58",
+			"title": "ANITOY Frieren Figure 20 cm with Base, No Box – Frieren: Beyond Journey's End, New Edition",
+			"description": "Product description:\n\nProduct information:\n\n• Product name: ANITOY Frieren figure 20 cm with base, no box – Frieren: Beyond Journey's End, new edition 📦\n• Size: 20 cm 📏\n• Features: Frieren: Beyond Journey's End figure, with base, without box 📦\n• Edition: New edition 🔄\n\nProduct details:\n\n• The Frieren: Beyond Journey's End figure is designed at a size of 20 cm. 📏\n• Comes with a base, suitable for display. 📦\n• New edition, bringing users a fresh experience. 🔄\n\nAdditional information:\n\n• The product does not come with a box. 📦\n• Suitable for fans of Frieren figures. 📚",
+			"note": "Drafted from the TikTok listing on 2026-11-10 for the seller to review. \"Frieren pháp sư tiễn táng\" is the Vietnamese name of the series, written as its English title."
 		},
-		"v-osakana-sitting": {
-			"slug": "osakana-neko-chan-sitting-figure",
-			"source": "e51694c6",
-			"title": "Osakana Neko-chan Sitting Figure – My Cat Is a Kawaii Girl",
-			"description": "My Cat Is a Kawaii Girl – Osakana neko, sitting, a very chill decoration for your work or study corner."
+		"tt-1730194053367433356": {
+			"slug": "osakana-neko-sitting-figure-14cm",
+			"source": "23d9d37d",
+			"title": "ANITOY Osakana Neko Anime Figure by Shimahara – Kawaii Figure for Study Desk Decor, Collectible Toy, 150 g",
+			"description": "The Osakana neko figure is a unique and adorable decoration. Made of PVC, it is durable, easy to clean and water-resistant. Weighing 150 g and standing about 14 cm tall, it fits easily on a desk, a bookshelf or anywhere you like.\n\nThe legs are removable, making the figure easier to move and arrange. The face can be swapped between 2 styles, making it easy to change the look of your decoration. To change the face, first remove the hair, then remove the face, fit the other face and put the hair back.\n\nSome real photos of the product are provided so you can picture it before deciding to buy. With its unique design and swappable face, the Neko Kemono cat-eared girl is a wonderful decoration for your living space.",
+			"note": "Drafted from the TikTok listing on 2026-11-10 for the seller to review."
 		},
 		"v-kimetsu": {
 			"slug": "demon-slayer-kimetsu-no-yaiba-figure-tanjirou-nezuko-zenitsu",
@@ -87,7 +89,9 @@
 		"Power cầm búa": "Power holding a hammer",
 		"Denji tay cưa": "Denji with chainsaw arms",
 		"Denji kéo nút": "Denji pulling the cord",
-		"Danheng": "Dan Heng"
+		"Danheng": "Dan Heng",
+		"Không hộp": "No box",
+		"Có hộp": "With box"
 	},
 	"attributeNames": {
 		"Suitable age": "Suitable age",

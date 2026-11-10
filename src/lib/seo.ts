@@ -93,6 +93,9 @@ export function productJsonLd(s: Settings, source: Product, lang: Lang = "vi") {
 			embedUrl: `https://www.tiktok.com/player/v1/${v.id}`,
 			url: `https://www.tiktok.com/@${site.tiktok.handle}/video/${v.id}`,
 		}));
+	// Only this website's own approved buyer reviews (shown on the page). TikTok Shop's rating is
+	// never presented as ours, and no reviewer names are put in structured data.
+	const own = p.siteReviews && p.siteReviews.count > 0 ? p.siteReviews : null;
 	const base = {
 		"@context": "https://schema.org",
 		name: p.title,
@@ -102,6 +105,9 @@ export function productJsonLd(s: Settings, source: Product, lang: Lang = "vi") {
 		category,
 		url: absoluteUrl(s, productPath(p, lang)),
 		...(videos.length ? { subjectOf: videos } : {}),
+		...(own
+			? { aggregateRating: { "@type": "AggregateRating", ratingValue: Math.round((own.sum / own.count) * 10) / 10, reviewCount: own.count, bestRating: 5, worstRating: 1 } }
+			: {}),
 	};
 	if (!hasVariants(p)) {
 		const sku = p.skus[0]!;

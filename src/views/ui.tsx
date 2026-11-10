@@ -1,8 +1,9 @@
 import type { Child } from "hono/jsx";
-import { collectionName, isSoldOut, leadSku, priceRange, productViews, tiktokVideoUrl, unitsSold } from "../lib/catalog";
+import { collectionName, combinedRating, isSoldOut, leadSku, priceRange, productViews, tiktokVideoUrl, unitsSold } from "../lib/catalog";
 import type { Settings } from "../lib/config";
 import type { Lang } from "../lib/i18n";
 import { formatCount, formatVnd, percentOff } from "../lib/money";
+import type { PublicReview } from "../lib/reviews";
 import { imageSrc, productPath } from "../lib/seo";
 import type { Product, Video } from "../lib/types";
 import { Icon } from "./icons";
@@ -56,29 +57,66 @@ export function Price({ product, lang, showTag = true }: { product: Product; lan
 }
 
 /**
- * The TikTok Shop rating, attributed (not presented as this site's reviews), and units sold on
- * TikTok Shop and this website together.
+ * The rating of TikTok Shop (as imported) and this website's approved reviews combined, attributed
+ * to both, and units sold on TikTok Shop and this website together. `long` adds the counts and
+ * each side's own rating.
  */
 export function TikTokStats({ product, lang, long = false }: { product: Product; lang: Lang; long?: boolean }) {
 	const t = text[lang];
-	const r = product.tiktokRating;
+	const r = combinedRating(product);
 	const sold = unitsSold(product);
 	if (!r && !sold) return null;
+	const where = r?.tiktok && r.site ? t.ratingsBoth(r.count) : r?.site ? t.ratingsSite(r.count) : t.ttRatings(r?.tiktok?.count ?? 0);
 	return (
-		<p class="tt-stats">
-			{r && (
-				<span class="tt-stats__rating" title={t.ttRatingTitle}>
-					<Icon name="star" size={14} /> {r.value.toFixed(1)}
-					{long && <span class="muted">{t.ttRatings(r.count)}</span>}
-				</span>
-			)}
-			{sold > 0 && (
-				<span title={t.soldTitle}>
-					{t.sold(formatCount(sold, lang))}
-					{long && <span class="muted">{t.soldWhere}</span>}
-				</span>
-			)}
-		</p>
+		<>
+			<p class="tt-stats">
+				{r && (
+					<span class="tt-stats__rating" title={r.tiktok && r.site ? t.ratingTitle : r.site ? t.siteRatingTitle : t.ttRatingTitle}>
+						<Icon name="star" size={14} /> {r.value.toFixed(1)}
+						{long && <span class="muted">{where}</span>}
+					</span>
+				)}
+				{sold > 0 && (
+					<span title={t.soldTitle}>
+						{t.sold(formatCount(sold, lang))}
+						{long && <span class="muted">{t.soldWhere}</span>}
+					</span>
+				)}
+			</p>
+			{long && r?.tiktok && r.site && <p class="small muted">{t.ratingSplit(r.tiktok.value.toFixed(1), r.tiktok.count, r.site.value.toFixed(1), r.site.count)}</p>}
+		</>
+	);
+}
+
+/** Approved reviews from this website's buyers (plain text, masked names). */
+export function ReviewList({ reviews, count, lang }: { reviews: PublicReview[]; count: number; lang: Lang }) {
+	const t = text[lang];
+	const date = new Intl.DateTimeFormat(lang === "vi" ? "vi-VN" : "en-GB", { dateStyle: "medium", timeZone: "Asia/Ho_Chi_Minh" });
+	return (
+		<section class="section" id="reviews" aria-labelledby="reviews-title">
+			<SectionHeader title={t.reviewsTitle} sub={t.reviewsSub(count)} />
+			<ul class="reviews">
+				{reviews.map((r) => (
+					<li class="review window card-pad">
+						<p class="review__head">
+							<span class="tt-stats__rating" role="img" aria-label={t.stars(r.rating)}>
+								{"★".repeat(r.rating)}
+								<span class="muted">{"★".repeat(5 - r.rating)}</span>
+							</span>{" "}
+							<strong>{r.author}</strong> · <span class="small muted">{t.verifiedBuyer}</span> ·{" "}
+							<time class="small muted" datetime={r.createdAt}>
+								{date.format(new Date(r.createdAt))}
+							</time>
+						</p>
+						{r.comment && (
+							<div class="prose" lang={r.lang === lang ? undefined : r.lang}>
+								<Paragraphs text={r.comment} />
+							</div>
+						)}
+					</li>
+				))}
+			</ul>
+		</section>
 	);
 }
 

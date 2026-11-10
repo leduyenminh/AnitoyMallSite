@@ -84,31 +84,21 @@
       "videoIds": ["7478866157714296069"]
     },
     {
-      "videoOnly": true,
-      "id": "v-frieren-20cm",
-      "slug": "mo-hinh-frieren-om-hoa-20cm-co-de",
-      "title": "Mô hình Frieren pháp sư tiễn táng 20cm đứng ôm hoa – có đế, no box",
-      "description": "Frieren ôm đóa hoa tưởng nhớ Himmel – khoảnh khắc đáng nhớ nhất của series. Cao 20cm, có đế trưng bày (no box).",
-      "attributes": [{ "name": "Chiều cao", "value": "20 cm" }, { "name": "Chất liệu", "value": "Nhựa PVC" }, { "name": "Đế trưng bày", "value": "Có (no box)" }],
+      "tiktokProductId": "1734056119197271180",
+      "slug": "mo-hinh-frieren-phap-su-tien-tang-20cm-co-de",
       "collection": "frieren",
       "category": "figure",
       "tags": ["frieren", "himmel", "figure", "20cm"],
       "featured": 98,
-      "imageVideoIds": ["7619409900178803969", "7597853119460019477", "7618627305706900757", "7613067330490322184"],
       "videoIds": ["7621226947661548801", "7618627305706900757", "7611820025145478420", "7597853119460019477", "7619409900178803969", "7613067330490322184", "7611009561905925384"]
     },
     {
-      "videoOnly": true,
-      "id": "v-osakana-sitting",
-      "slug": "mo-hinh-osakana-neko-chan-dang-ngoi",
-      "title": "Mô hình Osakana neko-chan dáng ngồi – My cat is a kawaii girl",
-      "description": "My cat is a kawaii girl – bé neko Osakana dáng ngồi, trang trí góc làm việc, học tập rất chill.",
-      "attributes": [{ "name": "Chất liệu", "value": "Nhựa PVC" }],
+      "tiktokProductId": "1730194053367433356",
+      "slug": "mo-hinh-osakana-neko-dang-ngoi-14cm",
       "collection": "neko",
       "category": "mini",
       "tags": ["neko", "osakana", "kinako", "cat girl"],
       "featured": 88,
-      "imageVideoIds": ["7557246821714693377", "7621236910488440071", "7492968606561537281", "7555214243209956628"],
       "videoIds": ["7555214243209956628", "7557246821714693377", "7621236910488440071", "7492968606561537281", "7621218499368733972", "7478384002714373382", "7495648865081642261", "7499137968263810325"]
     },
     {

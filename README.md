@@ -3,6 +3,7 @@
 Online shop for the TikTok seller **[Mall of Anitoy (@leduyenminh)](https://www.tiktok.com/@leduyenminh)**, running entirely on Cloudflare. Products, photos and videos are cloned from the shop's TikTok Shop listings and TikTok videos; **orders and payments happen on this site**, not on TikTok Shop.
 
 - **Catalog cloned from TikTok Shop** – `npm run import` reads each listing page (title, description, specifications, photos, SKUs, price, list price, stock, rating, units sold) and downloads the photos into `public/media/p`. Video covers come from TikTok's public oEmbed API.
+- **Buyer reviews** – after delivery, buyers rate each product from their order page; approved reviews appear on the product page, and the rating shown combines TikTok Shop's and the website's.
 - **TikTok videos** play in TikTok's official embed player (loaded only on tap, so pages stay fast). Each product shows its videos and view counts.
 - **Payments**: cash on delivery (COD) and **VietQR** bank transfer straight into the shop's **BIDV** account, with optional automatic confirmation through SePay. No wallets, cards or payment gateways: no money passes through a third party.
 - **Three themes**: Light, Dark and **Windows 95** (bevelled windows, title bars, taskbar with Start menu and clock). Follows the system light/dark by default; the choice is remembered and applied before first paint.
@@ -132,7 +133,7 @@ Picked up → the order is shipped; delivered → delivered; a COD order becomes
 | --- | --- |
 | Place order | 5 per minute per IP (Rate Limiting binding) |
 | Order lookup | 10 per minute per IP |
-| Quote / order status | 60 per minute per IP |
+| Quote / order status / review | 60 per minute per IP |
 | Open orders per phone number | 3 unpaid, unconfirmed orders at a time |
 | Orders per network | 8 per hour per (hashed) IP |
 | Bots | Hidden honeypot field; optional Turnstile (`TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY`) |
@@ -149,11 +150,18 @@ npm run import
 
 Deploy, then in `/admin → Sản phẩm` click **Cập nhật nội dung** (keeps your prices and stock) or **Cập nhật cả giá & tồn kho từ TikTok**. Listings that can't be read keep their previous data.
 
-- The shop has **20 products** on TikTok Shop; the 9 linked from its videos are imported. Add the other listing ids to `data/listings.json` (the long number at the end of each listing URL) and run the import again.
+- The shop has **20 products** on TikTok Shop; the 11 linked from its videos are imported. Add the other listing ids to `data/listings.json` (the long number at the end of each listing URL) and run the import again.
+- When TikTok shows its security-check puzzle, the import keeps the previous data for that listing. A listing can then be read by hand: open it in a browser, solve the puzzle yourself, and copy the page's product data the same way the importer does (this is how the Frieren 20cm and Osakana sitting listings were added on 2026-11-10).
 - Prices imported are TikTok's current prices (including TikTok's own promotions), and the struck-through price is the listing's regular price on TikTok. Adjust them in `/admin` if your website prices differ.
 - Website stock is separate from TikTok stock. Re-import with prices and stock when you restock, or edit stock in `/admin`.
-- Three items appear in videos without a TikTok Shop listing (Frieren 20cm, Osakana sitting, Kimetsu). They are imported as hidden **drafts** with photos from the video covers; set a price and stock in `/admin`, then switch them to **Đang bán**.
+- One item appears in videos without a TikTok Shop listing (Kimetsu). It is imported as a hidden **draft** with photos from the video covers; set a price and stock in `/admin`, then switch it to **Đang bán**. The Frieren 20cm and Osakana sitting figures now have listings and are imported as normal products; their old video-only drafts (`v-frieren-20cm`, `v-osakana-sitting`) stay hidden in the database, so set them to **Ngừng bán** in `/admin`.
 - TikTok ratings and units sold are shown with "trên TikTok Shop" attribution and are **not** put into structured data as this site's reviews.
+
+## Buyer reviews
+
+When an order is delivered, its order page asks the buyer for 1–5 stars and an optional comment per product (one review per product per order; an edit goes back for approval). Reviews wait in `/admin/danh-gia` until you approve or hide them. A review shows the buyer's initials only ("A. N." for Nguyen Van A); the full name, phone and address are never stored with it. Hide any comment that contains personal details.
+
+The rating on product cards and pages combines TikTok Shop's rating (as last imported, with its number of ratings) and the approved website reviews, weighted by their counts, e.g. "4.9 (39 đánh giá trên TikTok Shop và website)" with each side's own rating underneath. Google's structured data (`aggregateRating`) carries the website's own reviews only.
 
 ## Google Merchant Center and SEO
 
@@ -188,7 +196,8 @@ public/                  assets (CSS, JS), media (product photos, video covers),
 src/index.tsx            routes, edge cache, security headers, admin auth, payment callbacks, cron
 src/lib/                 db (D1), orders, quote, payments (VietQR payload, SePay bank webhook),
                          limits, seo (JSON-LD, feeds, sitemaps), catalog, config, validation,
-                         i18n (languages and paths), translations (English product text)
+                         i18n (languages and paths), translations (English product text),
+                         reviews (buyer reviews)
 src/views/               layout, components, text (vi/en strings), pages (home, listing, product,
                          checkout, order, info, admin)
 ```

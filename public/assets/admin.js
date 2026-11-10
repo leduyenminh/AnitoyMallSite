@@ -79,6 +79,21 @@ $$("[data-product-status]").forEach((select) =>
 	}),
 );
 
+$$("[data-review-status]").forEach((btn) =>
+	btn.addEventListener("click", async () => {
+		const row = btn.closest("[data-review-id]");
+		btn.disabled = true;
+		const res = await post(`/api/admin/reviews/${encodeURIComponent(row.dataset.reviewId)}`, { status: btn.dataset.reviewStatus, seen: row.dataset.reviewUpdated });
+		if (res.ok) return location.reload();
+		if (res.status === 409) {
+			window.alert("Người mua vừa sửa đánh giá này. Trang sẽ tải lại để bạn đọc bản mới trước khi duyệt.");
+			return location.reload();
+		}
+		btn.disabled = false;
+		btn.textContent = "Lỗi – thử lại";
+	}),
+);
+
 $$("[data-import]").forEach((btn) =>
 	btn.addEventListener("click", async () => {
 		if (!confirmed(btn)) return;

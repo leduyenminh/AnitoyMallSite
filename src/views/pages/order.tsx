@@ -3,6 +3,7 @@ import { paymentLabelsByLang } from "../../lib/config";
 import { type Lang, locales, routes } from "../../lib/i18n";
 import { formatVnd } from "../../lib/money";
 import { qrSvg, vietQrPayload } from "../../lib/payments/vietqr";
+import type { Review } from "../../lib/reviews";
 import type { Order, OrderEvent, OrderLine } from "../../lib/types";
 import { Icon } from "../icons";
 import type { ViewCtx } from "../layout";
@@ -25,9 +26,11 @@ const dateTime = (iso: string, lang: Lang) => `${dateFormats[lang].format(new Da
  * The order is the shopper's own (opened with its access token). `lines` are the order's lines as
  * shown in the page's language (localizeLines); amounts come from `order`.
  */
-export function OrderPage({ ctx, order, lines, notice }: { ctx: ViewCtx; order: Order; lines: OrderLine[]; notice?: "new" }) {
+export function OrderPage({ ctx, order, lines, notice, reviews = [] }: { ctx: ViewCtx; order: Order; lines: OrderLine[]; notice?: "new"; reviews?: Review[] }) {
 	const { s, lang } = ctx;
 	const t = text[lang];
+	// One review per product (a product may be on several lines, one per variant).
+	const reviewable = order.status === "delivered" ? lines.filter((l, i) => lines.findIndex((x) => x.productId === l.productId) === i) : [];
 	const cancelled = order.status === "cancelled";
 	const awaitingPayment = !cancelled && order.paymentStatus === "unpaid" && order.paymentMethod !== "cod";
 	const step = STEPS.indexOf(order.status as (typeof STEPS)[number]);
@@ -81,6 +84,45 @@ export function OrderPage({ ctx, order, lines, notice }: { ctx: ViewCtx; order: 
 							</p>
 						)}
 					</section>
+
+					{reviewable.length > 0 && (
+						<section class="window card-pad" aria-labelledby="review-title">
+							<h2 id="review-title">{t.reviewYourItems}</h2>
+							<p class="small muted">{t.reviewIntro}</p>
+							{reviewable.map((l) => {
+								const r = reviews.find((x) => x.productId === l.productId);
+								return (
+									<form class="review-form" data-review-form data-product-id={l.productId}>
+										<p>
+											<strong>{l.title}</strong>
+											{r && <span class="small muted"> · {t.reviewStatus[r.status]}</span>}
+										</p>
+										<fieldset class="star-input">
+											<legend>{t.ratingLabel}</legend>
+											{[5, 4, 3, 2, 1].map((n) => (
+												<label>
+													<input type="radio" name="rating" value={String(n)} checked={r?.rating === n} />
+													<span aria-hidden="true">{"★".repeat(n)}</span>
+													<span class="sr-only">{t.stars(n)}</span>
+												</label>
+											))}
+										</fieldset>
+										<label class="field">
+											<span>{t.commentLabel}</span>
+											<textarea name="comment" maxlength={1000} rows={3}>
+												{r?.comment ?? ""}
+											</textarea>
+											<small class="muted">{t.commentHint}</small>
+										</label>
+										<p class="form-error" data-form-error role="alert" hidden></p>
+										<button type="submit" class="btn btn--primary btn--sm">
+											{r ? t.updateReview : t.sendReview}
+										</button>
+									</form>
+								);
+							})}
+						</section>
+					)}
 
 					{awaitingPayment && order.paymentMethod === "vietqr" && s.bank && (
 						<section class="window card-pad vietqr">

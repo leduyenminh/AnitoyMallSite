@@ -879,6 +879,55 @@ textarea {
 	fill: var(--accent);
 }
 
+/* Buyers' reviews (product page) and the review form (delivered order page). */
+.reviews {
+	display: grid;
+	gap: 10px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.review__head {
+	margin: 0 0 6px;
+}
+.review .tt-stats__rating,
+.star-input span[aria-hidden] {
+	color: var(--accent-strong);
+	letter-spacing: 1px;
+}
+.review .prose p {
+	margin: 0 0 6px;
+}
+.review-form {
+	display: grid;
+	gap: 8px;
+	padding: 12px 0;
+	border-top: 1px solid var(--border);
+}
+.review-form p {
+	margin: 0;
+}
+.star-input {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 14px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+.star-input legend {
+	margin-bottom: 4px;
+	font-size: 0.88rem;
+	font-weight: 500;
+}
+.star-input label {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 44px;
+	cursor: pointer;
+}
+
 .rail {
 	display: grid;
 	grid-auto-flow: column;

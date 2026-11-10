@@ -62,7 +62,28 @@ const migrations: string[][] = [
 			created_at TEXT NOT NULL
 		)`,
 	],
+	// 2: reviews from this website's buyers (src/lib/reviews.ts). Only a masked name is stored.
+	[
+		`CREATE TABLE IF NOT EXISTS reviews (
+			id TEXT PRIMARY KEY,
+			order_id TEXT NOT NULL,
+			product_id TEXT NOT NULL,
+			rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+			comment TEXT NOT NULL,
+			author TEXT NOT NULL,
+			lang TEXT NOT NULL,
+			status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'hidden')),
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			UNIQUE (order_id, product_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS reviews_product ON reviews (product_id, status, created_at)`,
+		`CREATE INDEX IF NOT EXISTS reviews_status ON reviews (status, created_at)`,
+	],
 ];
+
+/** The migrations, read-only (tests build older schemas from them). */
+export const schemaMigrations: readonly (readonly string[])[] = migrations;
 
 let ready: Promise<void> | null = null;
 
@@ -202,7 +223,13 @@ const skuFromRow = (r: SkuRow): Sku => ({
 	...(r.tiktok_sku_id ? { tiktokSkuId: r.tiktok_sku_id } : {}),
 });
 
-function assemble(rows: ProductRow[], skuRows: SkuRow[], soldRows: SoldRow[] = []): Product[] {
+interface ReviewStatRow {
+	product_id: string;
+	n: number;
+	total: number;
+}
+
+function assemble(rows: ProductRow[], skuRows: SkuRow[], soldRows: SoldRow[] = [], reviewRows: ReviewStatRow[] = []): Product[] {
 	const skus = new Map<string, Sku[]>();
 	for (const r of skuRows) {
 		const list = skus.get(r.product_id) ?? [];
@@ -210,6 +237,7 @@ function assemble(rows: ProductRow[], skuRows: SkuRow[], soldRows: SoldRow[] = [
 		skus.set(r.product_id, list);
 	}
 	const sold = new Map(soldRows.map((r) => [r.product_id, Math.max(0, Math.trunc(Number(r.sold) || 0))]));
+	const reviews = new Map(reviewRows.filter((r) => r.n > 0).map((r) => [r.product_id, { count: Number(r.n), sum: Number(r.total) }]));
 	return rows.map((r) => ({
 		...(JSON.parse(r.data) as Omit<Product, "id" | "slug" | "status" | "featured" | "skus" | "createdAt" | "updatedAt">),
 		id: r.id,
@@ -217,11 +245,15 @@ function assemble(rows: ProductRow[], skuRows: SkuRow[], soldRows: SoldRow[] = [
 		status: r.status,
 		featured: r.featured,
 		...(sold.get(r.id) ? { siteSold: sold.get(r.id) } : {}),
+		...(reviews.get(r.id) ? { siteReviews: reviews.get(r.id) } : {}),
 		skus: (skus.get(r.id) ?? []).sort((a, b) => a.position - b.position),
 		createdAt: r.created_at,
 		updatedAt: r.updated_at,
 	}));
 }
+
+/** Approved website reviews per product (a small GROUP BY over an indexed table). */
+const REVIEW_STATS = `SELECT product_id, COUNT(*) AS n, SUM(rating) AS total FROM reviews WHERE status = 'approved' GROUP BY product_id`;
 
 interface SoldRow {
 	product_id: string;
@@ -267,11 +299,11 @@ export function invalidateCatalog({ sold = false }: { sold?: boolean } = {}) {
 /** Every product (all statuses), cached briefly per isolate. Checkout re-reads stock uncached. */
 export async function loadCatalog(db: D1Database): Promise<Product[]> {
 	if (catalogCache && Date.now() - catalogCache.at < CATALOG_TTL_MS) return catalogCache.products;
-	const [[products, skus], sold] = await Promise.all([
-		db.batch<ProductRow | SkuRow>([db.prepare("SELECT * FROM products"), db.prepare("SELECT * FROM skus")]),
+	const [[products, skus, reviews], sold] = await Promise.all([
+		db.batch<ProductRow | SkuRow | ReviewStatRow>([db.prepare("SELECT * FROM products"), db.prepare("SELECT * FROM skus"), db.prepare(REVIEW_STATS)]),
 		siteSoldRows(db),
 	]);
-	const result = assemble(products!.results as ProductRow[], skus!.results as SkuRow[], sold);
+	const result = assemble(products!.results as ProductRow[], skus!.results as SkuRow[], sold, reviews!.results as ReviewStatRow[]);
 	catalogCache = { at: Date.now(), products: result };
 	return result;
 }
@@ -295,6 +327,14 @@ function bumpCatalogVersion(db: D1Database) {
 }
 
 let versionCache: { at: number; value: string } | null = null;
+
+/** Runs `statements` in one batch with a catalog version bump, so edge-cached pages re-render. */
+export async function withCatalogBump(db: D1Database, statements: D1PreparedStatement[]): Promise<D1Result[]> {
+	const results = await db.batch([...statements, bumpCatalogVersion(db)]);
+	invalidateCatalog();
+	versionCache = null;
+	return results.slice(0, statements.length);
+}
 
 /** Changes whenever the seller edits the catalog; part of the edge page-cache key. */
 export async function catalogVersion(db: D1Database): Promise<string> {
