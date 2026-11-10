@@ -677,7 +677,7 @@ app.get("/admin/danh-gia", async (c) => {
 app.post("/api/admin/reviews/:id", async (c) => {
 	const b = (await c.req.json().catch(() => ({}))) as { status?: unknown; seen?: unknown };
 	if ((b.status !== "approved" && b.status !== "hidden") || typeof b.seen !== "string" || b.seen.length > 40) return c.json({ error: "invalid" }, 400);
-	// Only the version the seller read: a review the buyer edited since then is shown to her again.
+	// Only the version the seller read: a review the buyer edited since then is shown to the seller again.
 	if ((await setReviewStatus(c.env.DB, c.req.param("id"), b.status, b.seen)) === "changed") return c.json({ error: "changed" }, 409);
 	log.info("review.moderated", { reviewId: c.req.param("id"), status: b.status });
 	return c.json({ ok: true });

@@ -157,7 +157,7 @@ describe("buyer reviews", () => {
 		expect(await setReviewStatus(db, "rv_missing", "approved", NOW.toISOString(), NOW)).toBe("changed");
 	});
 
-	it("never publishes a text the seller didn't see: a buyer's edit after she loaded /admin wins", async () => {
+	it("never publishes a text the seller didn't see: a buyer's edit after /admin was loaded wins", async () => {
 		const db = await freshDb();
 		const o = await order(db);
 		await submitReview(db, o.id, review(o.accessToken, { comment: "Đẹp" }), NOW);
